@@ -24,6 +24,7 @@
     "appId": "com.woopser.ai-character-creator",
     "productName": "AI Character Creator",
     "asar": true,
+    "afterSign": "scripts/after-sign.cjs",
     "directories": {
       "buildResources": "resources",
       "output": "release"

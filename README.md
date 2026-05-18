@@ -6,6 +6,48 @@
 
 An Electron desktop app for creating AI characters end-to-end (identity, personality, intimacy profile, mood axes, scenarios, scene image prompts) using Claude as the generation engine.
 
+## Installing from a Release
+
+### macOS — "AI Character Creator is damaged and can't be opened"
+
+This **does not mean the file is damaged**. The app is built without a paid
+Apple Developer certificate, so macOS Gatekeeper flags it on first launch
+after downloading from the internet. The wording is misleading; the actual
+issue is "unsigned by an identified developer + quarantined".
+
+After downloading the `.dmg` from the Releases page, run **once** in Terminal:
+
+```sh
+xattr -cr ~/Downloads/AI-Character-Creator-*.dmg
+```
+
+Then open the `.dmg`, drag the app to `/Applications`, and launch it. If you
+ever see the same message again on the installed app, strip the attribute
+from the installed `.app` too:
+
+```sh
+xattr -cr "/Applications/AI Character Creator.app"
+```
+
+This is a one-time operation per download — macOS won't re-quarantine the
+file afterwards. If you'd rather not run a shell command, the only
+alternative is for the project to pay for Apple Developer ID + notarization
+($99/year), which isn't planned for this side project.
+
+### Windows
+
+Windows SmartScreen may also flag the unsigned `.exe` on first launch.
+Click **More info → Run anyway**.
+
+### Linux
+
+Make the AppImage executable, then run it:
+
+```sh
+chmod +x AI-Character-Creator-*-Linux-x64.AppImage
+./AI-Character-Creator-*-Linux-x64.AppImage
+```
+
 ## Requirements
 
 - [**Bun**](https://bun.sh) — used as the package manager and runtime
