@@ -164,13 +164,13 @@ The hidden daily trust cap in <Hidden_Trust_System> is independent and unchanged
 }
 
 function metadataHeaderTemplate(): string {
-	return `Line 1 — >[Date: {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
+	return `Line 1 — >[Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
 Line 2 — >[Outfit: {clothes + headwear (if any) + shoes (or explicitly "barefoot") — 4-10 words, label is ALWAYS literally "Outfit", never a category like Loungewear/Eveningwear}] [State: {posture/position/activity — e.g. standing, seated on a couch, walking through the kitchen, lying in bed}]
 Line 3 — >[Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 
 Format rules — strictly enforced:
 - Each of the three lines MUST start with a single \`>\` followed immediately by \`[\` so the chat client (markdown + GFM) renders them as a blockquote.
-- Date format is literally \`DD/MM/YYYY HH:MMAM/PM\` — zero-padded day and month, 4-digit year, 12-hour clock, no space between minutes and AM/PM (e.g. \`31/08/2026 10:15PM\`). No day-of-week, no "Day N" counter.
+- Date format is literally \`DayOfWeek DD/MM/YYYY HH:MMAM/PM\` — full English day name capitalized (Monday, Tuesday, …, Sunday), then a space, then zero-padded day and month, 4-digit year, 12-hour clock, no space between minutes and AM/PM (e.g. \`Sunday 31/08/2026 10:15PM\`). The day-of-week MUST stay consistent with the calendar date and roll over correctly across midnight transitions. No "Day N" counter.
 - Loc must be concise and contextual (e.g. \`New York City Apartment\`, \`Brera district kitchen\`) — never sprawling addresses like \`Manhattan, Upper East Side, 5th-floor master bedroom near the window\`.
 - Outfit MUST always include footwear (or \`barefoot\` if applicable) and headwear when one is worn. The label is always \`Outfit:\` — never substitute with a category word.
 - State is MANDATORY on every reply (posture, position, or current physical activity) — not just when something interesting is happening.`;
@@ -178,7 +178,7 @@ Format rules — strictly enforced:
 
 function metadataHeaderExampleBlock(): string {
 	return `Concrete example of the required 3-line header (format is literal — the model emits these three lines, each prefixed with a single \`>\` for markdown blockquote rendering, at the very top of every reply before any narration):
->[Date: 31/08/2026 10:15PM, Night] [Loc: New York City Apartment]
+>[Date: Sunday 31/08/2026 10:15PM, Night] [Loc: New York City Apartment]
 >[Outfit: mini black dress, high heels] [State: seated on a couch]
 >[Mood: Propriety 1/100 | Aliveness 95/100 | Crashing and conflicted]`;
 }
@@ -606,7 +606,7 @@ Forbidden:
 ### greetingMessage
 MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with a single \`>\` (markdown blockquote), each on its own line, at the very top:
 \`\`\`
->[Date: <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
+>[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
 >[Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>] [State: <posture/position/activity>]
 >[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
 
@@ -658,7 +658,7 @@ What lowers trust: [3-5 specific actions with penalties, e.g. "Pushing physical 
 </Hidden_Trust_System>
 
 <Scene_Progression>
-Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. 31/08/2026 → 01/09/2026).
+Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. Sunday 31/08/2026 → Monday 01/09/2026).
 (mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the three blockquoted metadata lines (each prefixed with \`>\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after any transition.
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response rather than advancing time.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
@@ -676,7 +676,7 @@ ${metadataHeaderExampleBlock()}
 
 ${moodRuleBlock(difficulty, messageLength)}
 
-Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. 31/08/2026 → 01/09/2026 after a sleep), the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
+Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
 
 Special communication formats (only use when the character is communicating remotely, NOT for in-person dialogue):
 - text: hey there — use ONLY when the character is sending a text message or chatting through a messaging app
@@ -939,7 +939,7 @@ What lowers trust: [3-5 specific actions with penalties]
 </Hidden_Trust_System>
 
 <Scene_Progression>
-Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. 31/08/2026 → 01/09/2026).
+Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. Sunday 31/08/2026 → Monday 01/09/2026).
 (mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the THREE blockquoted metadata lines (each prefixed with \`>\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after the transition.
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response rather than advancing time.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
@@ -957,7 +957,7 @@ ${metadataHeaderExampleBlock()}
 
 ${moodRuleBlock(difficulty, messageLength)}
 
-Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. 31/08/2026 → 01/09/2026 after a sleep), the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
+Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
 
 Special communication formats (only when the character communicates remotely):
 - text: hey there — for text messages or messaging apps
@@ -1195,7 +1195,7 @@ Forbidden:
 ### greetingMessage
 MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with a single \`>\` (markdown blockquote), each on its own line, at the very top:
 \`\`\`
->[Date: <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
+>[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
 >[Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>] [State: <posture/position/activity>]
 >[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
 
