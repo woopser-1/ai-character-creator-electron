@@ -51,6 +51,7 @@
           "arch": ["arm64", "x64"]
         }
       ],
+      "artifactName": "AI-Character-Creator-${version}-macOS-${arch}.${ext}",
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false
@@ -65,7 +66,8 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "artifactName": "AI-Character-Creator-${version}-Windows-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -81,7 +83,8 @@
           "target": "AppImage",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "artifactName": "AI-Character-Creator-${version}-Linux-${arch}.${ext}"
     },
     "publish": {
       "provider": "github",
