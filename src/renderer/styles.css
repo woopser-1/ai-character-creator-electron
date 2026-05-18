@@ -1,0 +1,500 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+	/* Shared chrome-rail left-pad. Read by .chrome-rail for padding and by the
+	   SubHeader's atmospheric gradient so the violet wash always sits under the
+	   leading mark. Overridden under @media and [data-platform="darwin"] below. */
+	--rail-pad-left: 1rem;
+	/* Tinted-neutral substrate, hue 295, slightly higher chroma than v1 */
+	--background: oklch(0.11 0.02 295);
+	--foreground: oklch(0.97 0.006 295);
+	--card: oklch(0.16 0.024 295);
+	--card-foreground: oklch(0.97 0.006 295);
+	--popover: oklch(0.16 0.024 295);
+	--popover-foreground: oklch(0.97 0.006 295);
+	/* Studio Violet, brighter and more saturated than v1 */
+	--primary: oklch(0.72 0.25 305);
+	--primary-foreground: oklch(0.99 0 0);
+	/* Bright Violet, signal hue for alive states */
+	--primary-bright: oklch(0.8 0.28 303);
+	--secondary: oklch(0.22 0.028 295);
+	--secondary-foreground: oklch(0.92 0.012 295);
+	--muted: oklch(0.19 0.024 295);
+	--muted-foreground: oklch(0.62 0.025 295);
+	--accent: oklch(0.24 0.04 300);
+	--accent-foreground: oklch(0.94 0.012 295);
+	--destructive: oklch(0.66 0.22 25);
+	--border: oklch(1 0 0 / 9%);
+	--input: oklch(1 0 0 / 11%);
+	/* Ring uses Bright Violet so focus is unmistakable */
+	--ring: oklch(0.78 0.27 305);
+	--radius: 0.75rem;
+}
+
+@media (min-width: 640px) {
+	:root {
+		--rail-pad-left: 1.5rem;
+	}
+}
+:root[data-platform="darwin"] {
+	--rail-pad-left: max(1.5rem, 5rem - (100vw - 64rem) / 2);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html,
+	body,
+	#root {
+		height: 100%;
+	}
+	body {
+		@apply bg-background text-foreground;
+		font-family:
+			ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+			"Helvetica Neue", Arial, sans-serif;
+		/* The Violet Hour: three layered atmospheric washes */
+		background-image:
+			radial-gradient(
+				ellipse 90% 60% at 50% -5%,
+				oklch(0.72 0.25 305 / 0.18),
+				transparent 65%
+			),
+			radial-gradient(
+				ellipse 70% 50% at 0% 100%,
+				oklch(0.55 0.2 280 / 0.12),
+				transparent 60%
+			),
+			radial-gradient(
+				ellipse 50% 40% at 100% 100%,
+				oklch(0.82 0.16 200 / 0.05),
+				transparent 55%
+			);
+		background-attachment: fixed;
+	}
+
+	/* Custom scrollbar, matches the dark theme */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: oklch(1 0 0 / 12%) transparent;
+	}
+
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		background: oklch(1 0 0 / 10%);
+		border: 2px solid transparent;
+		background-clip: padding-box;
+		border-radius: 999px;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		background: oklch(1 0 0 / 22%);
+		background-clip: padding-box;
+	}
+	::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+}
+
+@layer utilities {
+	.glass {
+		@apply bg-white/3 backdrop-blur-xl;
+	}
+
+	/* Shared horizontal frame for the sticky chrome bands (NavHeader, SubHeader).
+	   Centered on the same axis as the page rail; reads --rail-pad-left from
+	   :root so the leading mark and atmospheric gradients stay vertically
+	   aligned at any window width and platform. */
+	.chrome-rail {
+		margin-inline: auto;
+		max-width: 64rem;
+		padding-inline: var(--rail-pad-left) 1rem;
+	}
+	@media (min-width: 640px) {
+		.chrome-rail {
+			padding-right: 1.5rem;
+		}
+	}
+
+	/* The expanded glow vocabulary, ordered quietest to loudest.
+	   xs / sm / md / lg use Studio Violet (atmospheric voice).
+	   lg uses Bright Violet because it marks a Hero CTA, an alive state.
+	   ring marks an active selection; rim marks rim-lit elevated surfaces. */
+	.glow-xs {
+		box-shadow: 0 0 12px oklch(0.72 0.25 305 / 0.1);
+	}
+
+	.glow-sm {
+		box-shadow: 0 0 20px oklch(0.72 0.25 305 / 0.22);
+	}
+
+	.glow-md {
+		box-shadow: 0 0 40px oklch(0.72 0.25 305 / 0.28);
+	}
+
+	.glow-lg {
+		box-shadow: 0 0 64px oklch(0.8 0.28 303 / 0.35);
+	}
+
+	.glow-ring {
+		box-shadow:
+			0 0 0 1px oklch(0.72 0.25 305 / 0.4),
+			0 0 24px oklch(0.72 0.25 305 / 0.2);
+	}
+
+	.glow-rim {
+		box-shadow:
+			0 0 0 1px oklch(0.78 0.27 305 / 0.25),
+			0 0 16px oklch(0.72 0.25 305 / 0.08);
+	}
+
+	/* One-shot welcome glow: applied to a surface for the first ~2s after it appears,
+	   then automatically settles to rest. Single ease curve, no loop. Use on
+	   character cards as they arrive, dialogs when first opened, etc. */
+	.just-arrived {
+		animation: just-arrived 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+
+	/* Editorial eyebrow label. Small, tight tracking, hue-tinted muted.
+	   Pairs with display headings; never used as body copy. */
+	.eyebrow {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: oklch(0.62 0.025 295);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Editorial display figure for big standalone numbers (count of characters,
+	   section indices). Tabular, ligature-friendly, very tight tracking. */
+	.display-figure {
+		font-feature-settings: "tnum" 1, "ss01" 1;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.04em;
+		font-weight: 600;
+		line-height: 0.9;
+	}
+
+	/* Hairline rule, violet-substrate aware. */
+	.hairline {
+		height: 1px;
+		background: oklch(1 0 0 / 9%);
+	}
+
+	/* Instrument meter: thin rail (no fill), single tick at the value position.
+	   Replaces the chunky progress-bar look for ValueMeter/MoodAxisMeter. */
+	.meter-rail {
+		position: relative;
+		height: 14px;
+		display: flex;
+		align-items: center;
+	}
+	.meter-rail::before {
+		content: "";
+		position: absolute;
+		inset-inline: 0;
+		height: 1px;
+		background: oklch(1 0 0 / 10%);
+	}
+	.meter-tick {
+		position: absolute;
+		top: 1px;
+		bottom: 1px;
+		width: 2px;
+		border-radius: 1px;
+		background: oklch(0.8 0.28 303);
+		box-shadow:
+			0 0 0 1px oklch(0.11 0.02 295),
+			0 0 10px oklch(0.72 0.25 305 / 0.7);
+		transform: translateX(-50%);
+		transition: left 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.meter-scale {
+		position: absolute;
+		inset-inline: 0;
+		top: 50%;
+		display: flex;
+		justify-content: space-between;
+		pointer-events: none;
+		transform: translateY(-50%);
+	}
+	.meter-scale span {
+		width: 1px;
+		height: 4px;
+		background: oklch(1 0 0 / 8%);
+	}
+
+	/* Hover-revealed overlay rail (gallery card actions). Cleaner than
+	   opacity-0/100 toggles repeated inline. */
+	.reveal-on-hover {
+		opacity: 0;
+		transform: translateY(4px);
+		transition:
+			opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+			transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.group:hover .reveal-on-hover,
+	.group:focus-within .reveal-on-hover {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes just-arrived {
+	0% {
+		box-shadow:
+			0 0 0 1px oklch(0.78 0.27 305 / 0.35),
+			0 0 48px oklch(0.72 0.25 305 / 0.32);
+	}
+	100% {
+		box-shadow:
+			0 0 0 1px oklch(0.78 0.27 305 / 0.22),
+			0 0 16px oklch(0.72 0.25 305 / 0.08);
+	}
+}
+
+@keyframes message-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes tool-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes thinking-dot {
+	0%,
+	100% {
+		opacity: 0.3;
+		transform: scale(0.85);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}
+
+@layer utilities {
+	.animate-message-in {
+		animation: message-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+
+	.animate-tool-in {
+		animation: tool-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+
+	.animate-thinking-dot {
+		animation: thinking-dot 1.4s ease-in-out infinite;
+	}
+
+	.animate-shimmer {
+		background: linear-gradient(
+			90deg,
+			oklch(1 0 0 / 0%) 0%,
+			oklch(1 0 0 / 6%) 50%,
+			oklch(1 0 0 / 0%) 100%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 2s ease-in-out infinite;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.001ms;
+		scroll-behavior: auto;
+	}
+
+	.animate-message-in,
+	.animate-tool-in,
+	.just-arrived {
+		animation: none;
+	}
+
+	.animate-thinking-dot,
+	.animate-shimmer {
+		animation: none;
+		background: oklch(1 0 0 / 6%);
+	}
+}
+
+.chat-markdown {
+	> :first-child {
+		margin-top: 0;
+	}
+	> :last-child {
+		margin-bottom: 0;
+	}
+
+	p {
+		margin: 0.4em 0;
+	}
+
+	strong {
+		font-weight: 600;
+		color: oklch(0.97 0.006 295);
+	}
+
+	em {
+		font-style: italic;
+		color: oklch(0.82 0.025 295);
+	}
+
+	h1,
+	h2,
+	h3,
+	h4 {
+		margin: 0.8em 0 0.3em;
+		font-weight: 600;
+		color: oklch(0.97 0.006 295);
+	}
+	h1 {
+		font-size: 1.15em;
+	}
+	h2 {
+		font-size: 1.08em;
+	}
+	h3 {
+		font-size: 1em;
+	}
+
+	ul,
+	ol {
+		padding-left: 1.4em;
+		margin: 0.4em 0;
+	}
+	ul {
+		list-style-type: disc;
+	}
+	ol {
+		list-style-type: decimal;
+	}
+	li {
+		margin: 0.15em 0;
+	}
+	li > p {
+		margin: 0;
+	}
+
+	code {
+		padding: 0.15em 0.35em;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.88em;
+		background: oklch(1 0 0 / 6%);
+		border: 1px solid oklch(1 0 0 / 8%);
+		border-radius: 0.3em;
+	}
+
+	pre {
+		padding: 0.75em 1em;
+		margin: 0.5em 0;
+		overflow-x: auto;
+		background: oklch(1 0 0 / 4%);
+		border: 1px solid oklch(1 0 0 / 8%);
+		border-radius: 0.5em;
+	}
+	pre code {
+		padding: 0;
+		font-size: 0.85em;
+		background: none;
+		border: none;
+	}
+
+	blockquote {
+		padding-left: 0.8em;
+		margin: 0.5em 0;
+		color: oklch(0.72 0.025 295);
+		border-left: 3px solid oklch(0.72 0.25 305 / 0.5);
+	}
+
+	hr {
+		margin: 0.6em 0;
+		border: none;
+		border-top: 1px solid oklch(1 0 0 / 9%);
+	}
+
+	a {
+		color: oklch(0.72 0.25 305);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	table {
+		width: 100%;
+		margin: 0.5em 0;
+		font-size: 0.9em;
+		border-collapse: collapse;
+	}
+	th,
+	td {
+		padding: 0.35em 0.6em;
+		text-align: left;
+		border: 1px solid oklch(1 0 0 / 10%);
+	}
+	th {
+		font-weight: 600;
+		background: oklch(1 0 0 / 4%);
+	}
+}

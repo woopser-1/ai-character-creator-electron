@@ -1,0 +1,77 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <path id="squircle" d="M 256 50 C 328.7 50 365.13 50 395.59 66.73 C 421.42 80.86 431.21 90.66 445.34 116.4 C 462 146.86 462 183.27 462 256 C 462 328.74 462 365.13 445.34 395.59 C 431.21 421.42 421.42 431.21 395.59 445.34 C 365.13 462 328.74 462 256 462 C 183.27 462 146.86 462 116.4 445.34 C 90.66 431.21 80.86 421.42 66.73 395.59 C 50 365.13 50 328.74 50 256 C 50 183.27 50 146.86 66.73 116.4 C 80.86 90.66 90.66 80.86 116.4 66.73 C 146.86 50 183.27 50 256 50 Z"/>
+
+    <linearGradient id="base" x1="256" y1="50" x2="256" y2="462" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1429"/>
+      <stop offset="1" stop-color="#0B0612"/>
+    </linearGradient>
+
+    <radialGradient id="wash1" cx="256" cy="40" r="340" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C166FA" stop-opacity="0.34"/>
+      <stop offset="0.6" stop-color="#C166FA" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="wash2" cx="60" cy="475" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6D55D2" stop-opacity="0.26"/>
+      <stop offset="0.7" stop-color="#6D55D2" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="wash3" cx="470" cy="470" r="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#80D2E2" stop-opacity="0.10"/>
+      <stop offset="0.6" stop-color="#80D2E2" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="halo" cx="256" cy="260" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C166FA" stop-opacity="0.30"/>
+      <stop offset="0.45" stop-color="#C166FA" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#C166FA" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="topGlare" x1="256" y1="50" x2="256" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="bottomShade" x1="256" y1="320" x2="256" y2="462" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.10"/>
+    </linearGradient>
+
+    <linearGradient id="glassRim" x1="256" y1="50" x2="256" y2="462" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+
+    <clipPath id="squircle-clip">
+      <use href="#squircle"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle-clip)">
+    <use href="#squircle" fill="url(#base)"/>
+    <use href="#squircle" fill="url(#wash1)"/>
+    <use href="#squircle" fill="url(#wash2)"/>
+    <use href="#squircle" fill="url(#wash3)"/>
+
+    <circle cx="256" cy="260" r="200" fill="url(#halo)"/>
+
+    <text x="256" y="322"
+          font-family="ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif"
+          font-size="260"
+          font-weight="600"
+          letter-spacing="-6"
+          text-anchor="middle"
+          fill="#F5F1FA">ac</text>
+
+    <use href="#squircle" fill="url(#topGlare)"/>
+    <use href="#squircle" fill="url(#bottomShade)"/>
+
+    <use href="#squircle"
+         fill="none"
+         stroke="url(#glassRim)"
+         stroke-width="3"/>
+  </g>
+</svg>

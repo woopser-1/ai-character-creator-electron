@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-18T00:00:00.000Z",
+  "title": "Design System: AI Character Creator",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Studio Violet",
+        "canonical": "oklch(0.72 0.25 305)",
+        "tonalRamp": [
+          "oklch(0.14 0.05 305)",
+          "oklch(0.24 0.1 305)",
+          "oklch(0.36 0.15 305)",
+          "oklch(0.48 0.2 305)",
+          "oklch(0.6 0.24 305)",
+          "oklch(0.72 0.25 305)",
+          "oklch(0.84 0.2 305)",
+          "oklch(0.94 0.08 305)"
+        ]
+      },
+      "primary-bright": {
+        "role": "primary",
+        "displayName": "Bright Violet",
+        "canonical": "oklch(0.8 0.28 303)",
+        "tonalRamp": [
+          "oklch(0.16 0.06 303)",
+          "oklch(0.27 0.12 303)",
+          "oklch(0.4 0.18 303)",
+          "oklch(0.55 0.23 303)",
+          "oklch(0.68 0.27 303)",
+          "oklch(0.8 0.28 303)",
+          "oklch(0.9 0.18 303)",
+          "oklch(0.97 0.06 303)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Deep Night",
+        "canonical": "oklch(0.11 0.02 295)",
+        "tonalRamp": [
+          "oklch(0.07 0.014 295)",
+          "oklch(0.11 0.02 295)",
+          "oklch(0.16 0.024 295)",
+          "oklch(0.22 0.028 295)",
+          "oklch(0.32 0.03 295)",
+          "oklch(0.5 0.025 295)",
+          "oklch(0.74 0.018 295)",
+          "oklch(0.94 0.008 295)"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Desk Surface",
+        "canonical": "oklch(0.16 0.024 295)",
+        "tonalRamp": [
+          "oklch(0.09 0.016 295)",
+          "oklch(0.13 0.022 295)",
+          "oklch(0.16 0.024 295)",
+          "oklch(0.22 0.028 295)",
+          "oklch(0.32 0.03 295)",
+          "oklch(0.5 0.025 295)",
+          "oklch(0.74 0.018 295)",
+          "oklch(0.94 0.008 295)"
+        ]
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "Lifted Surface",
+        "canonical": "oklch(0.22 0.028 295)",
+        "tonalRamp": [
+          "oklch(0.13 0.022 295)",
+          "oklch(0.16 0.024 295)",
+          "oklch(0.22 0.028 295)",
+          "oklch(0.32 0.03 295)",
+          "oklch(0.43 0.028 295)",
+          "oklch(0.55 0.024 295)",
+          "oklch(0.76 0.018 295)",
+          "oklch(0.94 0.008 295)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Surface",
+        "canonical": "oklch(0.19 0.024 295)",
+        "tonalRamp": [
+          "oklch(0.13 0.02 295)",
+          "oklch(0.16 0.023 295)",
+          "oklch(0.19 0.024 295)",
+          "oklch(0.28 0.028 295)",
+          "oklch(0.4 0.028 295)",
+          "oklch(0.55 0.024 295)",
+          "oklch(0.76 0.018 295)",
+          "oklch(0.94 0.008 295)"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Half-Ink",
+        "canonical": "oklch(0.62 0.025 295)",
+        "tonalRamp": [
+          "oklch(0.22 0.024 295)",
+          "oklch(0.32 0.028 295)",
+          "oklch(0.46 0.028 295)",
+          "oklch(0.55 0.026 295)",
+          "oklch(0.62 0.025 295)",
+          "oklch(0.72 0.022 295)",
+          "oklch(0.84 0.016 295)",
+          "oklch(0.95 0.006 295)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.97 0.006 295)",
+        "tonalRamp": [
+          "oklch(0.4 0.024 295)",
+          "oklch(0.55 0.024 295)",
+          "oklch(0.7 0.018 295)",
+          "oklch(0.82 0.012 295)",
+          "oklch(0.9 0.01 295)",
+          "oklch(0.97 0.006 295)",
+          "oklch(0.985 0.004 295)",
+          "oklch(0.995 0.002 295)"
+        ]
+      },
+      "destructive": {
+        "role": "status",
+        "displayName": "Alarm Red",
+        "canonical": "oklch(0.66 0.22 25)",
+        "tonalRamp": [
+          "oklch(0.19 0.06 25)",
+          "oklch(0.31 0.11 25)",
+          "oklch(0.43 0.16 25)",
+          "oklch(0.56 0.22 25)",
+          "oklch(0.66 0.22 25)",
+          "oklch(0.76 0.2 25)",
+          "oklch(0.87 0.11 25)",
+          "oklch(0.96 0.04 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Top-of-page titles, character name on detail, page greetings. One per surface." },
+      "headline": { "displayName": "Headline", "purpose": "Section headers in long-form review, modal titles, named regions." },
+      "title": { "displayName": "Title", "purpose": "Card titles, dialog headers, active step labels in the stepper." },
+      "body": { "displayName": "Body", "purpose": "Running prose, chat messages, profile review text. Cap at 65–75ch." },
+      "label": { "displayName": "Label", "purpose": "Buttons, pills, status chips, form labels, sub-header pills." },
+      "mono": { "displayName": "Mono", "purpose": "Inline code, pre blocks, tool argument previews, file paths." }
+    },
+    "shadows": [
+      { "name": "glow-xs", "value": "0 0 12px oklch(0.72 0.25 305 / 0.1)", "purpose": "Quietest. Input focus accompaniment, hover on quiet buttons." },
+      { "name": "glow-sm", "value": "0 0 20px oklch(0.72 0.25 305 / 0.22)", "purpose": "Hover on primary CTA, active scenario card, streaming message." },
+      { "name": "glow-md", "value": "0 0 40px oklch(0.72 0.25 305 / 0.28)", "purpose": "Focused dialog at rest, just-generated character on first appearance." },
+      { "name": "glow-lg", "value": "0 0 64px oklch(0.8 0.28 303 / 0.35)", "purpose": "Hero CTA at rest. Uses Bright Violet because this is an alive state." },
+      { "name": "glow-ring", "value": "0 0 0 1px oklch(0.72 0.25 305 / 0.4), 0 0 24px oklch(0.72 0.25 305 / 0.2)", "purpose": "Active state on pills and stepper steps. Replaces focus ring entirely." },
+      { "name": "glow-rim", "value": "0 0 0 1px oklch(0.78 0.27 305 / 0.25), 0 0 16px oklch(0.72 0.25 305 / 0.08)", "purpose": "Hover on elevated cards. The room's light touching the surface edge." }
+    ],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Default entrance curve and glow easing. Settles into place, never bounces." },
+      { "name": "duration-message-in", "value": "300ms", "purpose": "Chat message and structured-draft entrance." },
+      { "name": "duration-tool-in", "value": "350ms", "purpose": "Tool-call card entrance inside the agent stream." },
+      { "name": "duration-glow-ease", "value": "250ms", "purpose": "Default glow transition on hover and focus state changes." },
+      { "name": "loop-thinking-dot", "value": "1.4s ease-in-out infinite", "purpose": "Three-dot pulse signaling agent is working." },
+      { "name": "loop-shimmer", "value": "2s ease-in-out infinite", "purpose": "Skeleton shimmer over streaming surfaces." }
+    ],
+    "ambient": [
+      { "name": "primary-wash", "value": "radial-gradient(ellipse 90% 60% at 50% -5%, oklch(0.72 0.25 305 / 0.18), transparent 65%)", "purpose": "The room's overhead Studio Violet light source." },
+      { "name": "deep-undertow", "value": "radial-gradient(ellipse 70% 50% at 0% 100%, oklch(0.55 0.2 280 / 0.12), transparent 60%)", "purpose": "Lower-left depth wash. Pulls the room into shadow." },
+      { "name": "cool-rim", "value": "radial-gradient(ellipse 50% 40% at 100% 100%, oklch(0.82 0.16 200 / 0.05), transparent 55%)", "purpose": "Faintest cool reflection at the bottom-right horizon. Suggests a second light source without becoming a second brand color." }
+    ],
+    "breakpoints": [
+      { "name": "app-min", "value": "900px", "purpose": "Minimum window width assumed for the Electron app." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default CTA. Carries glow-sm permanently; boosts to glow-md on hover.",
+      "html": "<button class=\"ds-btn-primary\">Generate character</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 2rem; padding: 0 0.625rem; background: oklch(0.72 0.25 305); color: oklch(0.99 0 0); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1; border: 1px solid transparent; border-radius: 0.6rem; cursor: pointer; box-shadow: 0 0 20px oklch(0.72 0.25 305 / 0.22); transition: background 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease-out, box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); outline: none; } .ds-btn-primary:hover { background: oklch(0.78 0.27 305); box-shadow: 0 0 40px oklch(0.72 0.25 305 / 0.28); } .ds-btn-primary:focus-visible { box-shadow: 0 0 0 1px oklch(0.72 0.25 305 / 0.4), 0 0 24px oklch(0.72 0.25 305 / 0.2); border-color: oklch(0.8 0.28 303); } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Hero CTA",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Signature primary button for the main flow moment (e.g. Generate character on Create). Uses glow-lg at rest. One per flow.",
+      "html": "<button class=\"ds-btn-hero\">Generate character profile</button>",
+      "css": ".ds-btn-hero { display: inline-flex; align-items: center; justify-content: center; height: 2.25rem; padding: 0 1rem; background: oklch(0.72 0.25 305); color: oklch(0.99 0 0); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.9rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1; border: 1px solid oklch(0.8 0.28 303 / 0.5); border-radius: 0.6rem; cursor: pointer; box-shadow: 0 0 64px oklch(0.8 0.28 303 / 0.35); transition: background 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease-out, box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); outline: none; } .ds-btn-hero:hover { background: oklch(0.78 0.27 305); box-shadow: 0 0 80px oklch(0.8 0.28 303 / 0.45); } .ds-btn-hero:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet action. Lifted Surface fill, gains glow-xs on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Save draft</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 2rem; padding: 0 0.625rem; background: oklch(0.22 0.028 295); color: oklch(0.97 0.006 295); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1; border: 1px solid transparent; border-radius: 0.6rem; cursor: pointer; transition: background 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); outline: none; } .ds-btn-secondary:hover { background: oklch(0.22 0.028 295 / 0.85); box-shadow: 0 0 12px oklch(0.72 0.25 305 / 0.1); } .ds-btn-secondary:focus-visible { box-shadow: 0 0 0 3px oklch(0.78 0.27 305 / 0.5); border-color: oklch(0.78 0.27 305); }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Signature chrome element. Carries state (autopilot, difficulty, model). Active = glow-ring with Bright Violet.",
+      "html": "<div class=\"ds-pill-row\"><button class=\"ds-pill\">Difficulty: balanced</button><button class=\"ds-pill ds-pill-active\">Autopilot, on</button></div>",
+      "css": ".ds-pill-row { display: inline-flex; gap: 0.5rem; align-items: center; } .ds-pill { display: inline-flex; align-items: center; justify-content: center; height: 1.75rem; padding: 0 0.625rem; background: oklch(0.22 0.028 295); color: oklch(0.62 0.025 295); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1; border: 1px solid transparent; border-radius: 9999px; cursor: pointer; transition: color 200ms ease-out, box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); outline: none; } .ds-pill:hover { color: oklch(0.97 0.006 295); box-shadow: 0 0 12px oklch(0.72 0.25 305 / 0.1); } .ds-pill:focus-visible { box-shadow: 0 0 0 3px oklch(0.78 0.27 305 / 0.5); } .ds-pill-active { color: oklch(0.97 0.006 295); box-shadow: 0 0 0 1px oklch(0.72 0.25 305 / 0.4), 0 0 24px oklch(0.72 0.25 305 / 0.2); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Transparent fill. Focus = Bright Violet border + glow-xs. The input glows back when you reach it.",
+      "html": "<label class=\"ds-input-label\">Character name<input class=\"ds-input\" placeholder=\"e.g. Inez Vega\" /></label>",
+      "css": ".ds-input-label { display: flex; flex-direction: column; gap: 0.375rem; color: oklch(0.62 0.025 295); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.01em; line-height: 1.3; } .ds-input { height: 2rem; padding: 0.25rem 0.625rem; background: transparent; color: oklch(0.97 0.006 295); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.875rem; font-weight: 400; line-height: 1.4; border: 1px solid oklch(1 0 0 / 0.11); border-radius: 0.6rem; outline: none; transition: border-color 250ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input::placeholder { color: oklch(0.62 0.025 295); } .ds-input:focus-visible { border-color: oklch(0.8 0.28 303); box-shadow: 0 0 12px oklch(0.72 0.25 305 / 0.1); }"
+    },
+    {
+      "name": "Card (rim-lit on hover)",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Default container. Neutral ring at rest, violet-tinted glow-rim on hover. The surface reads as touched by the room's violet light.",
+      "html": "<article class=\"ds-card\"><header class=\"ds-card-header\"><h3 class=\"ds-card-title\">Inez Vega</h3><p class=\"ds-card-description\">Detective. Keeps a diary.</p></header><div class=\"ds-card-content\">Greeting, intimacy profile and three scenarios are ready. Open the draft to refine.</div></article>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; background: oklch(0.16 0.024 295); color: oklch(0.97 0.006 295); border-radius: 1.05rem; box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.09); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 0.875rem; line-height: 1.55; transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-card:hover { box-shadow: 0 0 0 1px oklch(0.78 0.27 305 / 0.25), 0 0 16px oklch(0.72 0.25 305 / 0.08); } .ds-card-header { display: flex; flex-direction: column; gap: 0.25rem; } .ds-card-title { margin: 0; font-size: 1rem; font-weight: 500; line-height: 1.4; color: oklch(0.97 0.006 295); } .ds-card-description { margin: 0; font-size: 0.875rem; color: oklch(0.62 0.025 295); }"
+    },
+    {
+      "name": "Dialog (resting glow)",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Modal surface. Violet-tinted rim ring + glow-md at rest. Backdrop adds a violet wash behind.",
+      "html": "<div class=\"ds-dialog-scrim\"><section class=\"ds-dialog\"><header class=\"ds-dialog-header\"><h2 class=\"ds-dialog-title\">Refine scene</h2><p class=\"ds-dialog-description\">Adjust mood, intimacy and shot direction. Streams new prompts on save.</p></header><div class=\"ds-dialog-body\">Scene details land here.</div><footer class=\"ds-dialog-footer\"><button class=\"ds-btn-ghost\">Cancel</button><button class=\"ds-btn-primary\">Save and regenerate</button></footer></section></div>",
+      "css": ".ds-dialog-scrim { display: flex; align-items: center; justify-content: center; padding: 2rem; background: linear-gradient(oklch(0.11 0.02 295 / 0.5), oklch(0.11 0.02 295 / 0.5)), radial-gradient(ellipse 60% 50% at 50% 50%, oklch(0.72 0.25 305 / 0.08), transparent 60%); } .ds-dialog { display: flex; flex-direction: column; gap: 1rem; width: min(28rem, 100%); padding: 1.25rem; background: oklch(0.16 0.024 295); color: oklch(0.97 0.006 295); border-radius: 1.05rem; box-shadow: 0 0 0 1px oklch(0.78 0.27 305 / 0.25), 0 0 40px oklch(0.72 0.25 305 / 0.28); font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; animation: ds-dialog-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both; } .ds-dialog-header { display: flex; flex-direction: column; gap: 0.25rem; } .ds-dialog-title { margin: 0; font-size: 1.15rem; font-weight: 600; line-height: 1.25; letter-spacing: -0.005em; } .ds-dialog-description { margin: 0; font-size: 0.875rem; color: oklch(0.62 0.025 295); line-height: 1.5; } .ds-dialog-body { font-size: 0.875rem; line-height: 1.55; } .ds-dialog-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding-top: 0.5rem; } .ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 2rem; padding: 0 0.625rem; background: oklch(0.72 0.25 305); color: oklch(0.99 0 0); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; border: 1px solid transparent; border-radius: 0.6rem; cursor: pointer; box-shadow: 0 0 20px oklch(0.72 0.25 305 / 0.22); } .ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 2rem; padding: 0 0.625rem; background: transparent; color: oklch(0.97 0.006 295); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.01em; border: 1px solid transparent; border-radius: 0.6rem; cursor: pointer; } .ds-btn-ghost:hover { background: oklch(0.19 0.024 295); } @keyframes ds-dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Violet Hour",
+    "overview": "That moment late at night when the only light in the room is the screen, and the air itself takes a slight violet cast. Everything sits in that wash, and the things you touch hum back. The system is not restrained: it lets the brand color carry atmosphere, surfaces, accents, and signals as one continuous voice. Where the old direction kept violet rare and the room candle-lit, this one turns the room itself violet and lets the work glow inside it. Tonally: the page sits on a deeper, more chromatic dark (low-lightness violet-tinted neutral, hue 295). The body background carries three layered atmospheric washes that make the room read as inhabited light. Studio Violet itself is brighter and more saturated, with a partner token (Bright Violet) reserved for moments that should feel alive. Glow stops being a focus-only privilege and becomes the system's signature device: ambient on the page, rim-lit on cards, halo'd on primary controls, intensified on the thing you're acting on. The system explicitly rejects character.ai / anime / cyberpunk-game-HUD cliché: no neon hearts, no kawaii icon sets, no anime gradients, no gacha-rarity card grids, no sparkle confetti, no AI-magic gradient overlays sold as features. The neon here is architectural ambient light, not iconography.",
+    "keyCharacteristics": [
+      "Dark violet-tinted neutrals on hue 295 with a high-chroma Studio Violet that carries the brand voice (color strategy: Committed, ~40-50% of any given surface)",
+      "Atmospheric ambient glow on every page: three layered radial gradients (primary wash, deep undertow, cool rim)",
+      "Tonal layering + violet-tinted rings for elevation, no drop shadows on chrome",
+      "Expanded glow vocabulary (xs, sm, md, lg, ring, rim) used as the signature device",
+      "Pure system sans, scale-and-weight hierarchy, type stays quiet so color and glow can be loud",
+      "Ease-out-expo motion for entrances and glow transitions, glow never strobes or pulses decoratively"
+    ],
+    "rules": [
+      { "name": "The Violet Hour Rule", "body": "Studio Violet is the system's continuous voice, not a rare accent. It is allowed to carry 30-60% of any given screen across atmosphere, structure, accent, and signal. The dosage check is no longer whether you used too much but whether you used it without intent.", "section": "colors" },
+      { "name": "The Bright-Violet-Is-Signal Rule", "body": "Bright Violet (oklch(0.8 0.28 303)) is reserved for moments of intentful focus or alive-ness: the primary CTA focus halo, the active stepper pill, the just-arrived character card, the rim of a focused dialog. Never use Bright Violet for ambient atmosphere or for components at rest.", "section": "colors" },
+      { "name": "The Tinted-Neutral Rule", "body": "Every neutral is shifted toward hue 295 with chroma 0.02-0.028. Pure grayscale is forbidden. Pure white and pure black are forbidden by the OKLCH doctrine.", "section": "colors" },
+      { "name": "The Architectural Glow Rule", "body": "The neon in this system is architectural: room light, surface rim light, focus halo. Never iconography. No glowing hearts, no kawaii faces, no sparkle particles, no animated pulses, no CRT scanlines.", "section": "colors" },
+      { "name": "The Quiet-Type-Loud-Light Rule", "body": "Color and glow carry the brand voice; typography stays unobtrusive. No display serif, no script, no separate UI font for buttons. Type is structure; light is personality.", "section": "typography" },
+      { "name": "The 65ch Rule", "body": "Any block of running prose longer than three lines is capped at 65-75ch. Streaming chat is exempt because the dock width self-constrains.", "section": "typography" },
+      { "name": "The No-Drop-Shadow Rule", "body": "Chrome surfaces do not use box-shadow for grey-tone depth. They use Desk Surface + 1px ring + (on state) glow.", "section": "elevation" },
+      { "name": "The Glow-Is-the-Voice Rule", "body": "Glow has been promoted from focus-only signal to the system's signature device. Ambient on the page, rim-light on surfaces, halos on primary controls, intensified on the thing being acted on. Use generously but never decoratively.", "section": "elevation" },
+      { "name": "The Two-Layer Rule", "body": "Page to Desk Surface to Lifted Surface is the maximum depth. Nesting cards three deep is always wrong.", "section": "elevation" },
+      { "name": "The No-Pulse Rule", "body": "Glow does not strobe, pulse, breathe, or animate on its own. It eases on hover or focus (200-300ms ease-out-expo) and fades on state change. Static or transitional, never decorative.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Studio Violet generously: ambient page wash, primary CTAs, focus rings, link color, active state, rim-lit card edges. The Violet Hour Rule replaces the old One Violet Rule.",
+      "Do reserve Bright Violet for alive moments: focus halos on the primary CTA, active stepper pills, just-arrived character cards, focused dialog rims.",
+      "Do rim-light elevated surfaces: cards, dialogs, popovers carry violet-tinted rings on hover/focus.",
+      "Do layer surfaces tonally: Deep Night to Desk Surface to Lifted Surface.",
+      "Do use the glow vocabulary as signature: ambient on page, rim on cards, halo on CTAs, intensified on focused content. Match weight to role.",
+      "Do reach for a pill for state and a button for action. Pills carry glow-ring when active.",
+      "Do use ease-out-expo for entrances and glow transitions.",
+      "Do cap long-form prose at 65-75ch.",
+      "Do honor prefers-reduced-motion for every animation and for glow easing."
+    ],
+    "donts": [
+      "Don't ship anything that reads as a character.ai clone, an anime chat app, or a waifu card gallery. No glowing heart icons, no kawaii faces, no gacha-rarity framings, no sparkle particles, no glowing emoji, no anime-pink-and-cyan rainbow gradients.",
+      "Don't add a second saturated brand color beyond Studio Violet / Bright Violet and destructive red.",
+      "Don't use drop shadows on cards, dialogs, popovers, or dock panels. Elevation is tonal + ring + glow.",
+      "Don't use a colored side-stripe (border-left greater than 1px) on any callout or card. Single exception: the blockquote inside chat-markdown.",
+      "Don't use background-clip: text with a gradient. Gradient text is banned everywhere.",
+      "Don't use pure white or pure black. The project is OKLCH-doctrine.",
+      "Don't animate glow on its own. No pulsing halos, no breathing CTAs, no strobing rings, no CRT scanlines. Glow eases on hover/focus (200-300ms) and fades on state change.",
+      "Don't introduce a serif display face, a script, or a third font family.",
+      "Don't add hero-metric tiles, activate-your-workspace empty states, marketing-page hero typography, or onboarding tour overlays.",
+      "Don't use an em dash in UI copy.",
+      "Don't nest a card inside a card inside a card.",
+      "Don't use the atmospheric gradients (primary wash, deep undertow, cool rim) anywhere except on the body. They are interior lighting, not a component pattern."
+    ]
+  }
+}
