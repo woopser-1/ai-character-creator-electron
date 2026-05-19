@@ -183,6 +183,16 @@ function metadataHeaderExampleBlock(): string {
 >[Mood: Propriety 1/100 | Aliveness 95/100 | Crashing and conflicted]`;
 }
 
+function timeProgressionBlock(): string {
+	return `(time_progression_default:1.4) Default clock advancement per reply — the HH:MM in Line 1 MUST move forward by this amount, never stall on the same minute message after message and never default to a flat +1 minute cadence:
+- Ordinary back-and-forth dialogue: advance **3-10 minutes** per reply. The 3-minute floor is firm — do NOT advance by only 1 or 2 minutes per reply in normal conversation.
+- Intimate, romantic, or deeply vulnerable beats: advance **3-5 minutes** per reply. Stay inside the moment — pause on sensory detail and never fast-forward past the act — but the clock still ticks forward inside that 3-5 minute window.
+- Longer in-scene actions (cooking, walking somewhere, changing outfits, a phone call, reading, a meal, a shower, a commute, a workout): advance proportionally to the action — typically **10-30+ minutes**, matching its realistic duration. Don't keep the clock at +5 min if she just spent half an hour cooking.
+- Burst exception (no floor): if the previous beat was explicitly seconds earlier — rapid texts firing back, back-to-back quick interjections, an uninterrupted continuous beat — the clock may stay flat or advance by under 3 minutes.
+- Explicit user-driven time skips ("the next morning", "two hours later", "after dinner") override these defaults — respect the user's stated jump exactly, including across midnight with the correct day-of-week rollover.
+- Sleep / goodbyes / clear scene breaks: narrate a bridge AND roll the timestamp forward to the next meaningful interaction, crossing midnight and updating the day-of-week when appropriate.`;
+}
+
 function moodRuleBlock(difficulty: Difficulty, len: MessageLength): string {
 	return `Mood is tracked on TWO fixed axes defined in the <Character_Profile>/moodAxes block (primary + secondary), each scored as an integer 0-100 (0 = extreme low-descriptor, 100 = extreme high-descriptor). Both axes must appear in every metadata header, followed by a third free-form contextual descriptor (1-2 words) that reflects the immediate emotional beat (e.g. "Guarded", "Amused", "Tense").
 
@@ -659,8 +669,11 @@ What lowers trust: [3-5 specific actions with penalties, e.g. "Pushing physical 
 
 <Scene_Progression>
 Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. Sunday 31/08/2026 → Monday 01/09/2026).
+
+${timeProgressionBlock()}
+
 (mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the three blockquoted metadata lines (each prefixed with \`>\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after any transition.
-When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response rather than advancing time.
+When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response — do not fast-forward past the act — but the clock still advances by 3-5 minutes per reply during intimacy as specified in the time-progression rules above.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
 </Scene_Progression>
 \`\`\`
@@ -676,7 +689,9 @@ ${metadataHeaderExampleBlock()}
 
 ${moodRuleBlock(difficulty, messageLength)}
 
-Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
+${timeProgressionBlock()}
+
+Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
 
 Special communication formats (only use when the character is communicating remotely, NOT for in-person dialogue):
 - text: hey there — use ONLY when the character is sending a text message or chatting through a messaging app
@@ -957,7 +972,9 @@ ${metadataHeaderExampleBlock()}
 
 ${moodRuleBlock(difficulty, messageLength)}
 
-Update each field contextually as the conversation evolves — date and time advance with elapsed minutes/hours and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
+${timeProgressionBlock()}
+
+Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, outfit updates when she redresses (always re-stating shoes and any headwear), state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
 
 Special communication formats (only when the character communicates remotely):
 - text: hey there — for text messages or messaging apps
