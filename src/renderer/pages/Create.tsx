@@ -140,6 +140,7 @@ export function CreatePage() {
 		activeChat.status === "streaming" || activeChat.status === "submitted";
 
 	const seedAppliedRef = useRef(false);
+	const [pendingProfileInference, setPendingProfileInference] = useState(false);
 	useEffect(() => {
 		if (seedAppliedRef.current) return;
 		const seed = consumeReplaySeed();
@@ -158,6 +159,13 @@ export function CreatePage() {
 				truncatedMessages: seed.truncatedMessages,
 				newMessage: seed.newMessage,
 			});
+		} else if (seed.kind === "regenerate-from-gathering") {
+			// Skip the chat entirely. Replay the previously-recorded gathering
+			// messages into the transcript so the user can see what's about to
+			// feed generation, then trigger profile inference immediately.
+			characterChat.setMessages(seed.gatheringMessages);
+			setPhase("character-profile-review");
+			setPendingProfileInference(true);
 		} else {
 			setCharacter(seed.character);
 			setSavedId(seed.originCharacterId);
@@ -298,6 +306,17 @@ export function CreatePage() {
 			setProfileLoading(false);
 		}
 	}, [gatheringSummary, difficulty]);
+
+	// Fire profile inference automatically once a regenerate-from-gathering seed
+	// has dropped its messages into the transcript. The seed effect can't call
+	// inferProfile directly because it depends on `gatheringSummary` — a useMemo
+	// that only sees the seeded messages after the next render tick.
+	useEffect(() => {
+		if (!pendingProfileInference) return;
+		if (!gatheringSummary || gatheringSummary.trim().length === 0) return;
+		setPendingProfileInference(false);
+		void handleGenerateCharacter();
+	}, [pendingProfileInference, gatheringSummary, handleGenerateCharacter]);
 
 	const handleConfirmProfile = useCallback(
 		async ({

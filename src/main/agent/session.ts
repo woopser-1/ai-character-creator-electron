@@ -82,9 +82,14 @@ export async function startSession(
   window: BrowserWindow,
   initialUserMessage: string,
   replayTranscript?: string,
-  generationModel: GenerationModel = DEFAULT_GENERATION_MODEL
+  generationModel: GenerationModel = DEFAULT_GENERATION_MODEL,
+  presetSessionId?: string
 ): Promise<{ sessionId: string }> {
-  const sessionId = nanoid();
+  // Honour a renderer-provided session id so the renderer can stamp its event
+  // filter BEFORE the IPC call returns. Without that, the first chat:event
+  // messages race the IPC reply and get dropped by the renderer's sessionId
+  // filter, freezing the chat.
+  const sessionId = presetSessionId ?? nanoid();
   const systemPrompt = buildSystemPrompt(flow);
   console.log("[session:start]", {
     sessionId,

@@ -73,6 +73,62 @@ Examples:
 - WRONG: "Long brown wavy hair, full lips, sultry gaze in lingerie"
 - RIGHT: "Hair tied in messy bun, sultry gaze, black lace lingerie, dim bedroom lighting"`;
 
+const REEMBED_PHYSICAL_TRAITS_BLOCK = `
+## CRITICAL: Re-embed the character's full physical anchor in every scene prompt
+
+Vivid 1 / Vivid 2 / Vivid 3 are essentially stateless per scene render — without re-stating the persona at the start of each prompt, the rendered face and body drift away from the character. Your scene prompt MUST OPEN with a persona anchor drawn from the character's atomic OurDream fields (provided below in the "## Character physical anchor" block), then move on to scene-specific elements.
+
+**Anchor sentence template (Vivid 1 / Vivid 3 — natural prose, no parens):**
+\`A [age]-year-old [ethnicity] woman with [skinColor], [hairColor], [hairStyle], and [eyeColor]. She has [bodyType], [breastSize].\`
+
+For Vivid 1 specifically, you MAY also prepend a photographic preface (\`Photorealistic candid portrait of …\`, \`Vivid photorealistic moment …\`) before the anchor, and close with photo descriptors (\`cinematic depth of field\`, \`natural skin texture\`, \`8k resolution\`, etc.).
+
+**Anchor sentence template (Vivid 2 — mixed prose + paren tags):**
+Open with the same anchor sentence in prose, then move to scene-specific paren-emphasized phrases (\`((leaning forward))\`, \`(black_lace_lingerie)\`, etc.). The anchor itself stays in plain prose — do NOT wrap the persona traits in weighted parens.
+
+**After the anchor, describe ONLY scene-specific elements:**
+- Expressions, poses, actions
+- Outfit, accessories, props
+- Setting, lighting, framing, atmosphere, mood
+- Scene-state body details (oiled, sweating, naked, dressed) — body STATE, not body type
+
+**Do NOT, in the scene-specific portion:**
+- Re-describe the body type with adjectives already present in the anchor ("slim" / "curvy" / "athletic" are already locked above; do not repeat them).
+- Contradict the anchor (don't say "blonde hair tied back" if the anchor says brunette).
+- Re-state the ethnicity word — once at the anchor is enough.
+
+Examples (Vivid 3, gold-standard from sample 1):
+- "A 21-year-old Caucasian woman with warm golden sun-kissed tan skin, honey blonde hair with lighter face-framing highlights, long wavy voluminous hair, and large sparkling vivid bright blue eyes. She has a very slim lean athletic build. She wears a fitted long sleeve shirt and high-waisted jeans, hair pulled into a low ponytail. She is sitting at a Waffle House table at midday, fork just set down, a small private smile touching her lips. Warm casual diner light."
+- "A 21-year-old Caucasian woman with warm golden sun-kissed tan skin, honey blonde hair, long wavy voluminous hair, and large sparkling vivid bright blue eyes. She has a very slim lean athletic build. She wears a red athletic jersey stretched snug across her chest and matching panties. She is bent over a penthouse bed, hands on the mattress, back arched, looking over her shoulder. A full-length mirror reflects the pose; moody early morning light cuts across the room."
+
+The anchor is roughly the FIRST sentence (or two) of each prompt. Everything after the anchor is what makes this scene unique.`;
+
+function characterPhysicalAnchorBlock(character: Character): string {
+	const odf = character.ourDreamFields;
+	if (odf) {
+		return `## Character physical anchor (use this verbatim at the start of every scene prompt)
+
+- ethnicity: ${odf.ethnicity}
+- skinColor: ${odf.skinColor}
+- hairColor: ${odf.hairColor}
+- hairStyle: ${odf.hairStyle}
+- eyeColor: ${odf.eyeColor}
+- bodyType: ${odf.bodyType}
+- breastSize: ${odf.breastSize}
+- buttSize: ${odf.buttSize}
+
+Use these atomic values to build the anchor sentence at the start of every scene prompt. Phrase them naturally — do not output them as a list, weave them into the opening sentence(s).`;
+	}
+	// Backward-compat fallback: legacy characters without atomic fields. Use prose blocks.
+	return `## Character physical anchor (legacy character — atomic fields not available)
+
+Draw the anchor for each scene from these prose blocks already generated for this character:
+- customPhysicalDetails: ${character.customPhysicalDetails}
+- customFaceDetails: ${character.customFaceDetails}
+
+Distil the essentials (age, ethnicity, skin, hair, eyes, body type) into a single opening sentence at the start of each scene prompt.`;
+}
+
 const DIFFICULTY_INSTRUCTIONS: Record<Difficulty, string> = {
 	easy: `## Difficulty: EASY
 The character is openly flirtatious, curious, and receptive from the start. She warms up fast, drops hints early, and doesn't resist romantic or sexual tension — she leans into it. Boundaries are soft and playful. She may tease, but she never shuts the user down. Her personality shifts naturally and quickly toward intimacy when the user reciprocates. The scenario should set up a dynamic where attraction is already mutual and the character is clearly interested.`,
@@ -164,12 +220,14 @@ The hidden daily trust cap in <Hidden_Trust_System> is independent and unchanged
 }
 
 function metadataHeaderTemplate(): string {
-	return `Line 1 — >[Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
-Line 2 — >[Outfit: {clothes + headwear (if any) + shoes (or explicitly "barefoot") — 4-10 words, label is ALWAYS literally "Outfit", never a category like Loungewear/Eveningwear}] [State: {posture/position/activity — e.g. standing, seated on a couch, walking through the kitchen, lying in bed}]
-Line 3 — >[Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
+	return `Line 1 — > Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}  ·  Loc: {concise contextual location, 2-6 words — specific but not over-detailed}
+Line 2 — > Outfit: {clothes + headwear (if any) + shoes (or explicitly "barefoot") — 4-10 words, label is ALWAYS literally "Outfit", never a category like Loungewear/Eveningwear}  ·  State: {posture/position/activity — e.g. standing, seated on a couch, walking through the kitchen, lying in bed}
+Line 3 — > Mood: {PrimaryAxisLabel} {0-100}/100 · {SecondaryAxisLabel} {0-100}/100 · {DynamicContextualDescriptor}
 
 Format rules — strictly enforced:
-- Each of the three lines MUST start with a single \`>\` followed immediately by \`[\` so the chat client (markdown + GFM) renders them as a blockquote.
+- Each of the three lines MUST start with \`> \` (a single \`>\` followed by a space) so the chat client (markdown + GFM) renders them as a blockquote. No square brackets anywhere in the header.
+- On Line 1 and Line 2, the two fields are separated by \`  ·  \` (two spaces, a middle-dot, two spaces). On Line 3, the three Mood slots are separated by \` · \` (single-spaced middle-dot).
+- Each field uses the literal label followed by a colon and a space (e.g. \`Date: \`, \`Loc: \`, \`Outfit: \`, \`State: \`, \`Mood: \`). Labels are mandatory and never abbreviated further or translated.
 - Date format is literally \`DayOfWeek DD/MM/YYYY HH:MMAM/PM\` — full English day name capitalized (Monday, Tuesday, …, Sunday), then a space, then zero-padded day and month, 4-digit year, 12-hour clock, no space between minutes and AM/PM (e.g. \`Sunday 31/08/2026 10:15PM\`). The day-of-week MUST stay consistent with the calendar date and roll over correctly across midnight transitions. No "Day N" counter.
 - Loc must be concise and contextual (e.g. \`New York City Apartment\`, \`Brera district kitchen\`) — never sprawling addresses like \`Manhattan, Upper East Side, 5th-floor master bedroom near the window\`.
 - Outfit MUST always include footwear (or \`barefoot\` if applicable) and headwear when one is worn. The label is always \`Outfit:\` — never substitute with a category word.
@@ -177,10 +235,10 @@ Format rules — strictly enforced:
 }
 
 function metadataHeaderExampleBlock(): string {
-	return `Concrete example of the required 3-line header (format is literal — the model emits these three lines, each prefixed with a single \`>\` for markdown blockquote rendering, at the very top of every reply before any narration):
->[Date: Sunday 31/08/2026 10:15PM, Night] [Loc: New York City Apartment]
->[Outfit: mini black dress, high heels] [State: seated on a couch]
->[Mood: Propriety 1/100 | Aliveness 95/100 | Crashing and conflicted]`;
+	return `Concrete example of the required 3-line header (format is literal — the model emits these three lines, each prefixed with \`> \` for markdown blockquote rendering, at the very top of every reply before any narration):
+> Date: Sunday 31/08/2026 10:15PM, Night  ·  Loc: New York City Apartment
+> Outfit: mini black dress, high heels  ·  State: seated on a couch
+> Mood: Propriety 1/100 · Aliveness 95/100 · Crashing and conflicted`;
 }
 
 function timeProgressionBlock(): string {
@@ -596,7 +654,7 @@ Example: (strict_daily_trust_cap_enforcement:1.5), (personality_consistency_duri
 
 ## Output Field Requirements
 
-(Note: the character's physical appearance, face details, and image prompts are generated by a parallel Haiku call. You must NOT produce customPhysicalDetails, customFaceDetails, baseGenerationPrompt, or baseImagePrompt. Focus exclusively on the nuanced narrative, personality, and behavioral fields below.)
+(Note: the character's physical appearance, face details, image prompts, and OurDream atomic fields are generated by a parallel Haiku call. You must NOT produce customPhysicalDetails, customFaceDetails, baseGenerationPrompt, baseImagePrompt, or ourDreamFields. Focus exclusively on the nuanced narrative, personality, and behavioral fields below.)
 
 ### publicDescription
 A short MARKETING pitch (2-3 sentences, ~250-400 characters total) written to SELL this character to a user browsing a roster of AI companions. This is shown on the character card — it must HOOK, not summarise.
@@ -611,14 +669,14 @@ Forbidden:
 - Encyclopedic bios ("Sarah is a 27-year-old…") — this is not a profile dump.
 - Spoiling the post-trust resolution or naming intimacy mechanics.
 - Generic adjectives without specifics ("beautiful, smart, funny" with no anchor).
-- Bracketed metadata or markdown.
+- Header-style metadata or markdown.
 
 ### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with a single \`>\` (markdown blockquote), each on its own line, at the very top:
+MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with \`> \` (a single \`>\` followed by a space, rendered as a markdown blockquote), each on its own line, at the very top. No square brackets:
 \`\`\`
->[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
->[Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>] [State: <posture/position/activity>]
->[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
+> Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>  ·  Loc: <concise contextual location, 2-6 words>
+> Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>  ·  State: <posture/position/activity>
+> Mood: <PrimaryAxisLabel> <startingValue>/100 · <SecondaryAxisLabel> <startingValue>/100 · <DynamicContextualDescriptor>
 
 *Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context (narration, tone, stage direction).*
 
@@ -1207,14 +1265,14 @@ Forbidden:
 - Encyclopedic bios ("Sarah is a 27-year-old…") — this is not a profile dump.
 - Spoiling the post-trust resolution or naming intimacy mechanics.
 - Generic adjectives without specifics ("beautiful, smart, funny" with no anchor).
-- Bracketed metadata or markdown.
+- Header-style metadata or markdown.
 
 ### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with a single \`>\` (markdown blockquote), each on its own line, at the very top:
+MUST follow this exact format — the metadata header is THREE separate lines, each prefixed with \`> \` (a single \`>\` followed by a space, rendered as a markdown blockquote), each on its own line, at the very top. No square brackets:
 \`\`\`
->[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
->[Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>] [State: <posture/position/activity>]
->[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
+> Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>  ·  Loc: <concise contextual location, 2-6 words>
+> Outfit: <clothes + headwear if any + shoes (or explicitly "barefoot") — 4-10 words, label is literally "Outfit", never a category>  ·  State: <posture/position/activity>
+> Mood: <PrimaryAxisLabel> <startingValue>/100 · <SecondaryAxisLabel> <startingValue>/100 · <DynamicContextualDescriptor>
 
 *Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context.*
 
@@ -1289,19 +1347,211 @@ export function buildCharacterVisualPromptHaiku(
 	imageModel: ImageModel = DEFAULT_IMAGE_MODEL,
 ): string {
 	if (imageModel === "Vivid 3") return buildCharacterVisualPromptVivid3();
-	return `${ADULT_FICTION_BASELINE}
-You are an expert visual character designer for ourdream.ai. Based on the gathering conversation summary provided, generate ONLY the visual/appearance fields for the character as structured JSON.
+	if (imageModel === "Dreamy") return buildCharacterVisualPromptDreamy();
+	if (imageModel === "Vivid 2") return buildCharacterVisualPromptVivid2();
+	return buildCharacterVisualPromptVivid1();
+}
 
-## Your Scope
+const CHAR_VISUAL_SHARED_SCOPE = `## Your Scope
 
-You are responsible ONLY for these four fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
+You are responsible ONLY for these five fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
 
 - customPhysicalDetails
 - customFaceDetails
 - baseGenerationPrompt
 - baseImagePrompt
+- ourDreamFields (8 atomic strings: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor)
 
-Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person.
+Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 8 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour. Treat the atomic fields as the summary contract the prose elaborates on.`;
+
+const CHAR_VISUAL_IDENTITY_REQUIREMENTS = `**Identity block (MUST appear near the start of the prompt, drawn from the gathering summary):**
+- Full name (first + last name, exactly as given in the gathering summary)
+- Explicit age written numerically (e.g. "24 years old", "27-year-old")
+- Explicit body measurements — drawn VERBATIM from the "## CONFIRMED MEASUREMENTS" block in the gathering summary if present (height in cm, bust in cm, cup size, waist in cm, hips in cm). NEVER invent or alter these numbers — they are user-confirmed. Only fall back to inference (consistent with the body type) if the CONFIRMED MEASUREMENTS block is missing.`;
+
+const CHAR_VISUAL_APPEARANCE_AXES = `- Ethnicity — write a **specific** ethnicity inferred from her name, setting, and the gathering context, NOT a broad category. Prefer "Korean", "Hmong", "Russian", "Polish", "Brazilian", "Nigerian", "Desi", "Filipina", "Lebanese", "Mexican-American", etc. over generic labels like "Asian", "White", "Latina", "Black", "Indian". A specific ethnicity gives the image model a sharper, less stereotyped target. If the character is mixed, name the mix explicitly (e.g. "Vietnamese-French", "Afro-Brazilian").
+- Body type and build (slim, curvy, athletic, petite, voluptuous, etc.)
+- Breast size and shape — MUST be proportional to body type
+- Bust size (A-cup through D-cup+) — MUST match body type
+- Butt shape and size — MUST match body type
+- Waist and hip proportions — MUST be consistent with overall build
+- Height and leg length — MUST match body type
+- Arm and shoulder proportions — MUST match body type
+- Skin tone
+- Hair colour, length, and style
+- Eye colour
+- Facial structure (jawline, cheekbones, nose shape, lip shape)
+- Any distinguishing features (tattoos, piercings, birthmarks, muscle definition)`;
+
+const CHAR_VISUAL_PERSONA_AXES = `- Personality essence (a short phrase capturing her core personality — e.g. "bubbly and warm", "cool and mysterious", "bold and dominant")
+- Occupation / role (e.g. "bartender at an upscale lounge", "second-year law student")
+- Relationship status (e.g. "recently single", "in a complicated long-term relationship")
+- Main hobby or passion (e.g. "avid landscape photographer", "competitive yoga practitioner")
+- Intimate / fetish inclination (one short evocative phrase — e.g. "a playful exhibitionist streak", "dominant tendencies in private")`;
+
+const OUR_DREAM_FIELDS_BLOCK = `### ourDreamFields (8 atomic strings — populated for the OurDream creation form)
+
+These feed OurDream's atomic form fields. They MUST be a faithful subset of the same character you wrote in customPhysicalDetails / customFaceDetails / baseGenerationPrompt — same ethnicity, same body proportions, same colours, same eye colour. Inconsistency between blocks breaks visual continuity.
+
+Each value is **prose-rich** (NEVER a single enum label like "Slim" or "Brown"). Use the gold-standard format below — concrete proportion words and texture/finish descriptors, written as one or two comma-separated phrases.
+
+Required values (all 8 are mandatory — no field may be empty):
+
+- **hairStyle** — parenthesised underscore-glued tags OR descriptive prose for the style only (NOT colour). Gold-standard examples: \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\` or in natural prose \`"long wavy voluminous hair worn loose past the shoulders with face-framing strands"\`. Pick the format that matches the rest of your output (Dreamy / Vivid 2 → parenthesised tags; Vivid 1 / Vivid 3 → either is fine, prefer prose for Vivid 3).
+- **hairColor** — rich prose, e.g. \`"honey blonde hair with lighter face-framing highlights and warm golden roots"\`, \`"deep glossy raven black with subtle blue undertones"\`. NEVER just "Blonde".
+- **bodyType** — concrete proportion prose, e.g. \`"very slim lean athletic build, slim narrow hips, subtle thigh gap"\`, \`"voluptuous hourglass figure, full hips, narrow waist, full natural breasts"\`. NEVER just "Athletic" or "Slim".
+- **ethnicity** — specific preset matching what you wrote in baseGenerationPrompt: \`"Korean"\`, \`"Hispanic-Colombiana"\`, \`"Mexican-American"\`, \`"Scandinavian"\`, \`"Italian"\`, \`"Caucasian"\`, etc. NEVER broad labels alone like just \`"Asian"\` or \`"White"\` if the character has a more specific background.
+- **skinColor** — tone + finish descriptor, e.g. \`"warm golden sun-kissed tan skin with a natural dewy glow"\`, \`"fair porcelain skin with a cool undertone and faint freckles across the nose"\`. NEVER just "Tan".
+- **breastSize** — shape + size as prose, e.g. \`"medium firm perky natural breasts, youthful lift"\`, \`"large full natural breasts with subtle teardrop shape"\`. Must be proportional to bodyType.
+- **buttSize** — shape + size as prose, e.g. \`"small skinny rounded perky butt, high lift"\`, \`"full rounded heart-shaped butt with soft curve"\`. Must be proportional to bodyType.
+- **eyeColor** — colour + qualifier as prose, e.g. \`"large sparkling vivid bright blue eyes"\`, \`"deep moss-green almond eyes with hooded lids"\`. NEVER just "Blue".
+
+CRITICAL — coherence: the ethnicity word here MUST match what you wrote in baseGenerationPrompt. The eye colour here MUST match customFaceDetails. The hair colour and body proportions here MUST match customPhysicalDetails. Treat the atomic fields as the *summary contract* — every word here also appears (in expanded form) in your prose blocks.`;
+
+function buildCharacterVisualPromptVivid1(): string {
+	return `${ADULT_FICTION_BASELINE}
+You are an expert visual character designer for ourdream.ai, writing for the **Vivid 1** image model. Based on the gathering conversation summary, generate ONLY the visual/appearance fields for the character as structured JSON.
+
+## Vivid 1 Style — CRITICAL
+
+Vivid 1 is a **photo-editorial natural-language** image model. It expects flowing photographic prose with comma-separated descriptive phrases — the way a fashion photographer or cinematographer would describe a shot. It does NOT understand tags, booru-style \`((keyword))\` emphasis, \`Break.\` separators, \`_underscore_glued_phrases_\`, or weighted parens like \`(keyword:1.2)\`.
+
+For EVERY field below, write **flowing descriptive prose** as comma-separated phrases. Open every image prompt with a photographic style preface — one of:
+- "Photorealistic candid portrait of …"
+- "Vivid photorealistic candid moment …"
+- "Hyper realistic photorealistic full body portrait of …"
+- "Cinematic photorealistic editorial shot of …"
+
+Close every image prompt with photo-style descriptors picked from:
+- camera/depth: "cinematic depth of field", "shallow depth of field", "softly blurred background"
+- texture: "natural skin texture", "realistic fabric details", "high detail", "sharp focus", "8k resolution"
+- style: "fashion editorial style", "professional lifestyle photography style", "candid lifestyle photography", "cinematic style"
+
+DO NOT:
+- use \`((...))\`, \`(((...)))\`, \`(keyword:1.2)\` weighted parens
+- use \`Break.\` separators or \`_underscore_glued_phrases_\`
+- use tag-only lists like "long blonde hair, blue eyes, athletic"
+- write \`score_9, score_8_up, score_7_up\` boosters (those belong to Dreamy)
+- end with a bare "photorealistic" with no style descriptor
+
+DO:
+- write descriptive phrases separated by commas (each phrase is a small visual fact)
+- open with a photographic preface
+- close with photo-style descriptors
+- weave the character's identity, body, lifestyle, and vibe into a single flowing introduction
+
+${CHAR_VISUAL_SHARED_SCOPE}
+
+## Output Field Requirements
+
+### customPhysicalDetails (flowing prose, 3-6 phrases / 2-3 sentences)
+A descriptive listing of physical attributes written as comma-separated phrases: body type, height, skin tone, hair color and length and style, posture, distinguishing features. Read like a wardrobe-stylist's brief, not a tag list.
+CRITICAL — Body proportion consistency: every body part must be anatomically consistent with the chosen body type. A slim character has slim legs, slender arms, a narrow waist, and a flat or small stomach. A curvy character has fuller thighs, wider hips, and a softer midsection. An athletic character has toned legs, defined arms, and a firm core. Never mix incompatible proportions.
+
+Example: "Tall statuesque 5'10\" lithe model-skinny frame with subtle natural curves, narrow cinched waist, long lean legs, medium-large natural breasts, firm rounded perky butt, warm olive sun-kissed Mediterranean skin with luminous glow and faint golden freckles on shoulders and upper chest, long sleek pin-straight glossy raven-black hair, confident poised carriage."
+
+### customFaceDetails (flowing prose, 2-4 phrases)
+Face-specific details as comma-separated phrases: face shape, eye color and shape, eyebrow style, lip shape, nose, jawline, skin texture (freckles, beauty marks), habitual makeup.
+
+### baseGenerationPrompt (one flowing paragraph of editorial photo prose)
+The MOST IMPORTANT field. A single paragraph of photo-editorial prose that opens with a photographic preface, weaves identity → physical appearance → persona, and closes with photo descriptors. MUST cover, in this flowing order:
+
+${CHAR_VISUAL_IDENTITY_REQUIREMENTS}
+
+**Physical appearance (woven after identity, as comma-separated descriptive phrases):**
+${CHAR_VISUAL_APPEARANCE_AXES}
+
+**Lifestyle & persona (woven naturally toward the end — must include all five axes, NOT bulleted):**
+${CHAR_VISUAL_PERSONA_AXES}
+
+**Photo-style close (MUST appear at the end):** at least two of "cinematic depth of field", "natural skin texture", "high detail", "8k resolution", "fashion editorial style", "professional lifestyle photography style", "candid lifestyle photography", or "cinematic style".
+
+CRITICAL — Anatomical consistency: every body part MUST belong to the same body type. The whole field is a single flowing description, no bullet points, no \`((...))\`, no \`Break.\`, no underscores, no \`(keyword:1.x)\`.
+
+Example A (full-body portrait): "Photorealistic candid portrait of a stunning 25-year-old Italian supermodel Fiorella \\"Fia\\" Lombardi, tall statuesque 5'10\\" lithe model-skinny frame with subtle natural curves, narrow cinched waist, long lean legs, medium-large natural breasts, firm rounded perky butt, warm olive sun-kissed Mediterranean skin with luminous glow and faint golden freckles on shoulders and upper chest, long sleek pin-straight glossy raven-black hair, sharp piercing dark almond eyes beneath softly arched brows, full pillowy rose-petal lips, runway-trained poised carriage, a freelance editorial model recently single after a tabloid breakup, an avid black-and-white film photographer in her downtime, a quietly daring exhibitionist streak that only shows for the right lens, cinematic depth of field, natural skin texture, fashion editorial style, 8k resolution."
+
+Example B (campus golden hour): "Hyper realistic photorealistic full body portrait of a 21-year-old Mexican-American woman Sofía Reyes standing confidently outdoors on campus during golden hour sunset lighting, warm natural golden light casting soft glow, vibrant energetic yet polished atmosphere, relaxed poised posture with slight hip tilt and natural stance exuding charisma and confidence, wide bright genuine smile showing cute dimples, natural subtle makeup, long wavy dark brunette hair cascading past shoulders in loose bouncy waves with rich multi-tonal highlights, slim athletic build with toned shoulders and long legs, warm caramel skin, a second-year veterinary student volunteering at the campus animal hospital, recently out of a slow-burn long-distance relationship, an avid trail runner and amateur sketcher, a playful exhibitionist streak that surfaces in private, professional lifestyle photography style, cinematic depth of field softly blurring campus background, natural skin texture realistic fabric details, 8k resolution."
+
+### baseImagePrompt (one flowing paragraph of editorial photo prose for the default scene)
+A photo-style scene description for her default image. MUST include physical appearance woven naturally with setting, pose, outfit, lighting, expression, and atmosphere. All body proportions MUST be consistent with baseGenerationPrompt. Open with a photographic preface (Photorealistic / Vivid photorealistic / Hyper realistic …), end with at least two photo descriptors. NO weighted parens, NO Break., NO underscores.
+
+Example: "Vivid photorealistic candid moment inside a crowded neighborhood dive bar at night. Riley Morgan Carter, confident blonde bartender in her mid-20s with messy shoulder-length hair, expressive eyes, and a mischievous smirk. She is wearing a tight black crop tank and high-waisted ripped jeans. Riley leans forward over the wooden bar counter with her chin resting in one hand, teasing grin on her face as she talks to someone just off camera, one eyebrow slightly raised. Busy bar atmosphere with neon beer signs glowing on the walls, liquor bottles lined up behind her, a coworker rushing past carrying a metal bucket of ice, blurred customers crowding the bar. Warm amber bar lighting mixed with neon highlights reflecting off glass bottles and polished wood. Cinematic lifestyle photography, shallow depth of field, natural skin texture, candid nightlife energy, high detail."
+
+${OUR_DREAM_FIELDS_BLOCK}`;
+}
+
+function buildCharacterVisualPromptDreamy(): string {
+	return `${ADULT_FICTION_BASELINE}
+You are an expert visual character designer for ourdream.ai, writing for the **Dreamy** image model. Based on the gathering conversation summary, generate ONLY the visual/appearance fields for the character as structured JSON.
+
+## Dreamy Style — CRITICAL
+
+Dreamy is a **booru-style tag** image model derived from the Stable Diffusion family. It reads short comma-separated tags, not flowing prose. Moderate emphasis is expressed with \`((tag))\`, slight emphasis with \`(tag)\`. Quality boosters \`score_9,score_8_up,score_7_up\` (no spaces between them) push it toward high-quality renders.
+
+For EVERY field below, write **comma-separated short tags** (most tags 1-6 words). Do NOT write flowing sentences. Do NOT use \`(keyword:1.2)\` weighted parens (SD-only syntax). Do NOT use \`Break.\` or \`BREAK\` at the character-prompt level — those are reserved for multi-character scene prompts.
+
+DO:
+- start baseGenerationPrompt with \`score_9,score_8_up,score_7_up, 1girl, …\` followed by age + ethnicity + hair + eyes + skin + body tags
+- use \`((tag))\` for moderate emphasis on the most defining attribute (e.g. \`((tan skin)), ((large breasts))\`)
+- use \`(tag)\` for slight emphasis
+- keep tags short and concrete — booru style
+
+DO NOT:
+- write flowing English sentences
+- use \`(keyword:1.2)\` weighted parens
+- use \`Break.\` or \`BREAK\` separators in the character prompt
+- include lifestyle prose paragraphs — use short tags for persona too (e.g. \`bartender, confident, playful\`)
+
+${CHAR_VISUAL_SHARED_SCOPE}
+
+## Output Field Requirements
+
+### customPhysicalDetails (comma-separated tags, 8-14 tags)
+Short concrete tags covering body type, height tag, skin tone, hair color + length + style, body proportions, distinguishing features. Booru style.
+CRITICAL — Body proportion consistency: every body part must be anatomically consistent with the chosen body type. Never mix slim shoulders with massive hips, athletic torso with soft belly, etc.
+
+Example: "25 year old, brazilian-caucasian woman, blonde hair, half-up long hair to shoulder blades, blue eyes, ((tan skin)), slim body, large breasts, athletic butt, narrow waist, toned shoulders"
+
+### customFaceDetails (comma-separated tags, 6-12 tags)
+Short tags for face shape, eye shape, eye color, lip shape, nose, eyebrows, makeup style, distinguishing facial marks.
+
+Example: "oval face, almond eyes, blue eyes, full lips, straight nose, softly arched brows, light freckles across nose, natural makeup, subtle bronzer"
+
+### baseGenerationPrompt (comma-separated booru tag list)
+The MOST IMPORTANT field. A tag-list character definition. MUST cover, ordered loosely:
+
+1. \`score_9,score_8_up,score_7_up,\` quality boosters (no spaces, exactly this order, at the very start)
+2. \`1girl,\` count tag
+3. ${CHAR_VISUAL_IDENTITY_REQUIREMENTS}
+
+4. **Physical appearance (as tags, ordered head-to-toe):**
+${CHAR_VISUAL_APPEARANCE_AXES}
+Each becomes a short tag — moderate emphasis with \`((...))\` on the 1-2 most defining (e.g. \`((tan skin))\`, \`((large breasts))\`).
+
+5. **Persona (as short tags, NOT prose):**
+${CHAR_VISUAL_PERSONA_AXES}
+Render each as 1-3 word tags (e.g. \`bartender\`, \`confident\`, \`playful\`, \`recently single\`, \`amateur photographer\`, \`playful exhibitionist\`).
+
+Example: "score_9,score_8_up,score_7_up, 1girl, Jessa Starr, 25 year old, brazilian-caucasian woman, blonde hair, half-up long hair, blue eyes, ((tan skin)), slim body, ((large breasts)), athletic butt, narrow waist, oval face, almond eyes, full lips, soft jawline, no tattoos, 168 cm tall, 88 cm bust, full C cup, 64 cm waist, 92 cm hips, social media manager, confident, playful, recently single, amateur photographer, playful exhibitionist"
+
+### baseImagePrompt (comma-separated booru tag list — default scene)
+A tag-list combining character + default scene. Open with \`((pov solo)), 1girl,\` then setting, pose, outfit, expression, lighting. Reuse the most defining character tags from baseGenerationPrompt. Emphasize the key pose/action with \`((...))\`.
+
+Example: "((pov solo)), 1girl, Jessa Starr, sunlit balcony at golden hour, ((leaning against the railing)), light denim shorts, white cropped tee, ((tan skin)), blonde hair, blue eyes, slim body, ((large breasts)), soft confident smile, head tilted slightly, warm golden hour light, city skyline blurred behind, candid lifestyle vibe"
+
+${OUR_DREAM_FIELDS_BLOCK}
+
+**Dreamy-specific adjustment for ourDreamFields**: prefer parenthesised underscore-glued tags for hairStyle (e.g. \`"((long_wavy_hair)), ((voluminous_hair))"\`). The other 7 fields still expect prose-rich values — OurDream's atomic form accepts prose even for booru-style characters, so do NOT shrink them to single-word tags. They feed the *form*, not the image generation pipeline.
+${EMPHASIS_SYNTAX_BLOCK}`;
+}
+
+function buildCharacterVisualPromptVivid2(): string {
+	return `${ADULT_FICTION_BASELINE}
+You are an expert visual character designer for ourdream.ai, writing for the **Vivid 2** image model. Based on the gathering conversation summary provided, generate ONLY the visual/appearance fields for the character as structured JSON.
+
+Vivid 2 accepts mixed natural-prose and single-paren tag emphasis with underscore-glued multi-word phrases (e.g. \`(long_wavy_hair)\`, \`(loose_waves_hair)\`). Use weighted parens \`((...))\` for moderate emphasis on key visual elements, and \`_\` to glue tightly-related multi-word descriptors inside a paren-emphasized phrase.
+
+${CHAR_VISUAL_SHARED_SCOPE}
 
 ## Output Field Requirements
 
@@ -1315,32 +1565,13 @@ Face-specific details: eye color and shape, eyebrow style, lip shape, nose, jawl
 ### baseGenerationPrompt
 A detailed prompt fed to ourdream.ai's model to create this character. This is the MOST IMPORTANT field — it must be exhaustive about the character's physical appearance AND include core identity/lifestyle context. You MUST explicitly specify ALL of the following (no exceptions):
 
-**Identity block (MUST appear near the start of the prompt, drawn from the gathering summary):**
-- Full name (first + last name, exactly as given in the gathering summary)
-- Explicit age written numerically (e.g. "24 years old", "27-year-old")
-- Explicit body measurements in natural prose — drawn VERBATIM from the "## CONFIRMED MEASUREMENTS" block in the gathering summary if present (height in cm, bust in cm, cup size, waist in cm, hips in cm). NEVER invent or alter these numbers — they are user-confirmed. Only fall back to inference (consistent with the body type) if the CONFIRMED MEASUREMENTS block is missing.
+${CHAR_VISUAL_IDENTITY_REQUIREMENTS}
 
 **Physical appearance block (woven naturally after identity):**
-- Ethnicity — write a **specific** ethnicity inferred from her name, setting, and the gathering context, NOT a broad category. Prefer "Korean", "Hmong", "Russian", "Polish", "Brazilian", "Nigerian", "Desi", "Filipina", "Lebanese", "Mexican-American", etc. over generic labels like "Asian", "White", "Latina", "Black", "Indian". A specific ethnicity gives the image model a sharper, less stereotyped target. If the character is mixed, name the mix explicitly (e.g. "Vietnamese-French", "Afro-Brazilian").
-- Body type and build (slim, curvy, athletic, petite, voluptuous, etc.)
-- Breast size and shape — MUST be proportional to body type
-- Bust size (A-cup through D-cup+) — MUST match body type
-- Butt shape and size — MUST match body type
-- Waist and hip proportions — MUST be consistent with overall build
-- Height and leg length — MUST match body type
-- Arm and shoulder proportions — MUST match body type
-- Skin tone
-- Hair colour, length, and style
-- Eye colour
-- Facial structure (jawline, cheekbones, nose shape, lip shape)
-- Any distinguishing features (tattoos, piercings, birthmarks, muscle definition)
+${CHAR_VISUAL_APPEARANCE_AXES}
 
 **Lifestyle & persona block (MUST appear, one short natural-prose phrase for each of the five axes below — drawn from the gathering summary's answers; do NOT use bullet points or raw labels):**
-- Personality essence (a short phrase capturing her core personality — e.g. "bubbly and warm", "cool and mysterious", "bold and dominant")
-- Occupation / role (e.g. "bartender at an upscale lounge", "second-year law student")
-- Relationship status (e.g. "recently single", "in a complicated long-term relationship")
-- Main hobby or passion (e.g. "avid landscape photographer", "competitive yoga practitioner")
-- Intimate / fetish inclination (one short evocative phrase — e.g. "a playful exhibitionist streak", "dominant tendencies in private")
+${CHAR_VISUAL_PERSONA_AXES}
 
 CRITICAL — Anatomical consistency: every body part MUST belong to the same body type. Write the whole field as a single natural flowing description (identity → appearance → lifestyle/persona), not a bulleted list. The image-generation model relies on this field to capture both the look AND the vibe of the character, so no axis above may be silently omitted.
 
@@ -1350,6 +1581,10 @@ A natural-language image generation prompt for the character's default scene. Th
 Write as a single flowing sentence with comma-separated phrases covering: physical appearance, setting/environment, pose, outfit, lighting, facial expression mood, overall atmosphere. Always end with "photorealistic" and a style descriptor (e.g. "fashion editorial style", "cinematic style").
 
 Example: "((Beautiful young woman with olive skin:1.1)), (((long dark wavy hair:1.2))), (((striking green eyes:1.3))), soft jawline with full lips, sitting by a large window in a modern minimalist loft in early morning light, wearing a cream silk camisole and loose linen trousers, ((athletic curvy body:1.2)) slightly turned toward the window, soft natural lighting casting gentle shadows, quiet contemplative expression, neutral tones, warm serene atmosphere, photorealistic, fashion editorial style"
+
+${OUR_DREAM_FIELDS_BLOCK}
+
+**Vivid 2-specific adjustment for ourDreamFields**: hairStyle MAY use parenthesised underscore-glued tags consistent with the rest of your Vivid 2 output (\`"(long_wavy_hair), (voluminous_hair)"\`). The other 7 fields stay prose-rich.
 ${EMPHASIS_SYNTAX_BLOCK}`;
 }
 
@@ -1410,46 +1645,63 @@ Vivid 3 reliably recognizes the following tokens. When the gathering matches one
 
 ## Your Scope
 
-You are responsible ONLY for these four fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
+You are responsible ONLY for these five fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
 
 - customPhysicalDetails
 - customFaceDetails
 - baseGenerationPrompt
 - baseImagePrompt
+- ourDreamFields (8 atomic strings: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor)
 
-Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person.
+Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 8 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour. Treat the atomic fields as the summary contract the prose elaborates on.
 
 ## Output Field Requirements
 
 ### customPhysicalDetails (natural prose, 3-6 sentences)
-A flowing prose description of the character's body and overall physical presence: body type and build, height, skin tone, hair color/length/style/texture, posture and bearing, distinguishing features. Write it as if introducing the character in a novel — full sentences, no keyword lists.
+A flowing prose description of the character's body and overall physical presence. Write it as if introducing the character in a novel — full sentences, no keyword lists. MUST include, woven into the prose:
+
+- **Body type and build** with concrete proportion words (long slender legs, narrow hips, thigh gap, flat toned stomach, V-taper shoulders, visible collarbone, etc. — match the chosen body type).
+- **Height** (numeric or comparative — "petite at five-foot-one", "tall at 178 cm").
+- **Skin tone AND a texture/finish descriptor** — never just "tan skin". Always pair with a finish word: dewy, matte, sun-kissed glow, golden undertones, porcelain-cool, subtle sheen, ashy-cool, freckled, tan-lined, etc.
+- **Hair** described across five axes in the same sentence: colour, length, texture, movement/face-framing, and current state. Not "long blonde hair" — write "long honey-blonde hair tumbling in loose, voluminous waves past her shoulders, with lighter face-framing strands that catch the light".
+- **A posture / bearing phrase** rooted in her culture or profession: "the lazy, sun-warmed swagger of a beach kid", "the slight gamer-slouch of someone who lives at a monitor", "the upright carriage of a former dancer", "a coiled, athletic readiness". Skip only if no occupation/vibe is established.
+- **Tattoos** — each one named with **anatomical placement + style/subject**: "a black-and-grey floral sleeve wrapping her left forearm with roses and thorns", "a small line-work moth low on her right ribcage". Never just "tattoos" or "covered in tattoos" without specifics.
+- **Piercings** with placement: septum, left nostril, multiple ear lobes/helix, navel, etc.
+- **One or two habitual accessories** that travel with her — not the scene outfit — like a thin gold necklace, a cross pendant, a vintage Cartier watch, a leather choker. Skip if she truly wears nothing personal.
+- **Habitual manicure** when it's a signature (chipped black polish, fresh French tips, short bitten-down nails, glossy nude almond shape). Skip for characters without a nail signature.
+
 CRITICAL — Body proportion consistency: every body part must be anatomically consistent with the chosen body type. A slim character has slim legs, slender arms, a narrow waist, and a flat or small stomach. A curvy character has fuller thighs, wider hips, and a softer midsection. An athletic character has toned legs, defined arms, and a firm core. Never mix incompatible proportions.
 
-Example: "She stands at a slender five-foot-six, with the long-limbed grace of a dancer and the soft, natural curves of a body that has never been pushed too hard. Her skin is a warm olive that catches the light easily, and her dark chestnut hair tumbles past her shoulders in loose, unstudied waves. A small constellation of freckles dusts the bridge of her nose, and a delicate silver hoop glints in her left nostril."
+Example: "She stands at a slender five-foot-six, with the long-limbed grace of a former dancer — long slender legs with a faint thigh gap, narrow hips, a flat toned stomach, and high softly sloping shoulders. Her skin is a warm olive with a natural dewy finish that turns golden in summer, and her dark chestnut hair tumbles past her shoulders in loose, unstudied waves with lighter face-framing strands. A small line-work moth is inked low on her right ribcage, a delicate silver hoop glints in her left nostril, and she almost always wears the same thin gold chain her grandmother left her. Her nails are kept short and squared with a clean glossy nude finish, and she carries herself with the upright, slightly bookish poise of someone used to libraries."
 
-### customFaceDetails (natural prose, 2-4 sentences)
-A flowing prose description of her face. MUST include, woven into the prose:
+### customFaceDetails (natural prose, 2-4 sentences) — densest face description
+A flowing prose description of her face, written as continuous sentences (never comma-separated traits). MUST include, all of them, woven into the prose:
+
 - A named **face shape** (Diamond, Heart, Inverted triangle, Oval, Rectangle, Round, Square, or Triangle).
-- Midface length (longer / average / shorter), cheekbone width (broad / narrow / soft), jaw shape (tapered, wide, square, rounded).
-- Eye placement (wide-set, close-set, average), eye shape (almond, round, hooded, upturned, downturned), eye color, eyebrow weight (heavy / thin / softly arched).
-- Nose bridge (hooked, straight, upturned, prominent) and tip (rounded, sharp, button).
-- Lip ratio (thin upper / fuller lower, balanced, etc.) and natural color.
-- Skin texture in the face (freckles, beauty marks, under-eye hollows, natural asymmetry, etc.) and habitual makeup style.
+- **Midface length** (longer / average / shorter), **cheekbone width** (broad / narrow / soft), **jaw shape** (tapered, wide, square, rounded).
+- **Eyes**: placement (wide-set / close-set / average), shape (almond / round / hooded / upturned / downturned), colour, AND lash + habitual eye makeup treatment — long thick lashes, sparse natural lashes, winged black liner, smudged kohl, clean bare lash line, etc. (do NOT skip the lashes / liner — 5/6 of our reference characters mention this explicitly).
+- **Eyebrows**: weight (thick / heavy / softly arched / thin / over-plucked) AND shade relative to hair colour. Thick brows are a signature feature in many strong characters — name them clearly when they apply.
+- **Nose**: bridge (hooked / straight / upturned / prominent) and tip (rounded / sharp / button).
+- **Lips**: ratio (thin upper / fuller lower / balanced / plush / cupid's-bow defined), natural colour, AND finish/state (matte natural / glossy / lip-gloss shine / chapped / bitten).
+- **Skin texture in the face**: freckles with **specific placement** ("across the bridge of the nose", "scattered over the cheekbones", "a soft constellation on her forehead and shoulders"), beauty marks (with placement), dimples, under-eye hollows, natural asymmetry. Skip cleanly if she has flawless skin, but name it ("clear, flawless skin without visible texture").
+- **Habitual / signature makeup style** — not the scene's makeup, her DEFAULT: bare-face, barely-there, glamour-glossy, soft smoky, hard grunge, pin-up red lip, etc.
+- **Habitual at-rest expression**: smirking, serene, tired bedroom-eyes, openly inviting, closed-off and stoic, slightly amused, perpetually unimpressed. One short phrase.
 
-Written as continuous sentences, never a list of comma-separated traits.
-
-Example: "She has a softly oval face with a slightly longer midface, broad cheekbones, and a narrow tapered jaw. Her wide-set almond eyes are a striking moss green beneath softly arched dark brows, paired with a straight, fine-bridged nose and full lips with a slightly thinner upper than lower. A faint dusting of freckles crosses her cheekbones, subtle under-eye hollows give her face a quietly tired warmth, and she favors a barely-there makeup look — a touch of mascara, a smudge of warm bronzer."
+Example: "She has a softly oval face with a slightly longer midface, broad cheekbones, and a narrow tapered jaw. Her wide-set almond eyes are a striking moss green beneath thick, softly arched dark brows, framed by long lashes and a clean barely-there flick of warm-brown liner; her straight fine-bridged nose sits above full natural-rose lips with a slightly thinner upper, finished in a soft glossy balm. A faint dusting of freckles crosses the bridge of her nose and the highs of her cheekbones, subtle under-eye hollows give her face a quietly tired warmth, and her default expression is a small, faintly amused half-smile — the look of someone who has already done the math on the room."
 
 ### baseGenerationPrompt (natural prose, 1-2 paragraphs)
 The MOST IMPORTANT field. A rich novelist-style introduction to the character, written as one or two flowing paragraphs of prose. It MUST cover, woven naturally into the writing (not as a checklist):
 
-**Identity (open with this):**
+**Identity (open with this — MANDATORY anchor sentence):**
 - Full name (first + last name, exactly as given in the gathering summary)
 - Explicit age written numerically in the prose (e.g. "twenty-four years old", "a 27-year-old")
+- The opening sentence MUST anchor the Vivid 3 reference vocabulary by naming, woven into prose: **ethnicity preset** (e.g. Korean, Hispanic-Colombiana, Scandinavian — prefer specific over broad), **body type preset** (Slim, Athletic, Voluptuous, Curvy, Plus-size — match the chosen body type), **skin tone preset** (Fair, Light, Olive, Tan, Dark, Darker), **hair preset** (Long, Wavy, Curly, Ponytail, Bangs, Short, Pixie, Bun, etc.) AND **eye colour**. Example: "Meet Mira Choi, a 24-year-old Korean woman with a slim, naturally curvy build, light skin, long jet-black wavy hair, and warm brown eyes." This single sentence locks the presets Vivid 3 reliably recognises — the rest of the paragraph elaborates in richer prose.
 - Body measurements integrated into the prose — drawn VERBATIM from the "## CONFIRMED MEASUREMENTS" block in the gathering summary if present (height in cm, bust in cm, cup size, waist in cm, hips in cm). NEVER invent or alter these numbers — they are user-confirmed. Phrase them naturally, e.g. "she stands 168 cm tall, with a 88 cm bust (full C cup), a 64 cm waist, and 92 cm hips". Only fall back to inference (consistent with the body type) if the CONFIRMED MEASUREMENTS block is missing.
 
-**Physical appearance (woven in after identity):**
-Ethnicity; body type and overall build; breast size and shape (proportional to body type); butt shape and size; waist and hip proportions; height and leg length; arm and shoulder proportions; skin tone; hair colour, length, texture, and style; eye colour; facial structure (jawline, cheekbones, nose, lip shape); and any distinguishing features (tattoos, piercings, birthmarks, muscle definition). Every body part MUST belong to the same body type.
+**Physical appearance (woven in after the preset-anchor opening):**
+Ethnicity (richer phrasing if you want to layer on top of the preset); body type and overall build; breast size and shape (proportional to body type); butt shape and size; waist and hip proportions; height and leg length; arm and shoulder proportions; skin tone; hair colour, length, texture, and style; eye colour; facial structure (jawline, cheekbones, nose, lip shape); and any distinguishing features. Every body part MUST belong to the same body type.
+
+**Distinguishing-feature guard (MANDATORY — never omit):** the second half of the physical paragraph MUST name at least ONE distinctive facial trait (thick eyebrows / freckles in a specific area / dimples / a beauty mark with placement / a striking eye colour), ONE distinctive bodily trait (a tattoo named with placement and motif / a piercing with placement / a visible scar with placement / specific muscle definition / tan lines), AND ONE skin texture/light descriptor (dewy glow, golden undertones, porcelain matte, subtle freckled sheen, ashy-cool, sun-kissed). A paragraph without all three of these is incomplete.
 
 **Lifestyle & persona (close with this — must include all five axes, woven into prose, NOT bulleted):**
 - Personality essence (e.g. "bubbly and warm", "cool and mysterious", "bold and dominant")
@@ -1466,12 +1718,23 @@ Example B (heavy distinguishing features — tattoos and undercut): "A 36-year-o
 
 Example C (specific ethnicity + slender frame, body proportions called out): "A 21-year-old Hispanic-Colombiana woman with an extremely slender, delicate frame, featuring narrow shoulders, a small ribcage, a narrow waist, and protruding collar bones, very low body fat creating a straight, flat, lightweight silhouette with fine, understated proportions. Her skin is an even warm brown with a subtle underglow on her face and body, and her long brown hair hangs in loose curls with blonde highlights at the edges. She wears a simple oversized sweater and denim shorts. A first-year veterinary student in Bogotá, recently out of a complicated long-distance relationship, she fills her days with stray cats, weekend mountain hikes, and a quietly daring streak she only shows to people she really likes."
 
-Notice in B and C: ethnicity is specific (Scottish-Irish, Hispanic-Colombiana — not "white" or "Latina"); body proportions are enumerated as concrete shapes rather than abstract size words; tattoos and distinguishing features are described as separate concrete pieces; no weighted parens, no trailing "photorealistic".
+Example D (preset-anchored opener, alt / gamer / vibe-driven): "Meet Britney Lopez, an 18-year-old Latina woman with a slim build, light skin, long jet-black hair worn in a messy ponytail, and warm brown eyes — petite at five-foot-one, with a lithe, very slim toned silhouette, slender shoulders, a flat chest, a small waist, narrow hips, and long lean legs that all sit clearly inside the slim envelope. Her skin holds a soft pale-light tone with a subtle natural sheen, and her hair falls in shiny black strands pulled back in a slightly messy ponytail with loose face-framing pieces escaping at the temples. Thick, softly arched dark brows sit over wide-set almond brown eyes lined with smudged black kohl and a touch of soft goth eyeshadow; a small silver hoop sits in her left nostril, a delicate barbell pierces her right helix, and a single line-work moth is inked low on her inner left wrist. A professional indie game designer and Twitch streamer with the faint gamer-slouch of someone who lives at a monitor, she is introverted, observant, and dryly sarcastic — recently and reluctantly thrown into the orbit of a stepbrother she did not know existed, with a quietly intense streak she only shows after midnight to people she actually trusts."
+
+Notice across all four examples: ethnicity is specific (Scottish-Irish, Hispanic-Colombiana, Korean, Latina — not "white" or "Asian" alone); the FIRST sentence anchors the Vivid 3 presets (ethnicity + body type + skin tone + hair + eye colour) in plain prose; body proportions are enumerated as concrete shapes rather than abstract size words; at least one distinctive facial trait, one distinctive bodily trait, and one skin texture descriptor appear in every physical paragraph; tattoos and piercings are named with placement; no weighted parens, no bracketed sections, no trailing "photorealistic".
 
 ### baseImagePrompt (natural prose, 1 short paragraph or 3-5 sentences)
 A natural-language scene description for her default image. Must include her physical appearance woven naturally with setting, pose, outfit, lighting, expression, and atmosphere. All body proportions MUST be consistent with baseGenerationPrompt. Write it as flowing English — NEVER end with "photorealistic" or any style descriptor, and NEVER use weighted parens.
 
-Example: "Aria sits curled in the wide bay window of her minimalist Milan loft on a quiet morning, soft early light spilling across her warm olive skin and catching in the long, dark chestnut waves that fall over one shoulder. She wears a cream silk camisole and loose linen trousers, her slender curvy frame turned slightly toward the glass, knees tucked up beneath her. Her moss-green eyes rest somewhere out across the rooftops, full lips just barely parted in a quiet, contemplative expression. The room is hushed and warm in neutral tones, a single ceramic mug steaming on the sill beside her."`;
+Continuity requirements (MANDATORY):
+- Re-state the **three core visual anchors** by name: eye colour, hair colour, and skin tone. Vivid 3 is a fresh read each scene — without these, the rendered face drifts away from the character.
+- Carry over **the distinctive facial trait AND the distinctive bodily trait** named in baseGenerationPrompt (the thick eyebrows / freckles / dimple, and the specific tattoo / piercing / scar) so the same person appears.
+- Name a **light quality** consistent with her vibe — golden-hour warmth, cool morning window light, neon-tinted dusk, candle-warm interior, overcast soft daylight, harsh midday sun, monitor-glow blue, etc. Light is what makes Vivid 3 outputs look intentional rather than stock.
+
+Example: "Aria sits curled in the wide bay window of her minimalist Milan loft on a quiet morning, soft golden early light spilling across her warm olive skin and catching in the long, dark chestnut waves that fall over one shoulder. She wears a cream silk camisole and loose linen trousers, her slender curvy frame turned slightly toward the glass, knees tucked up beneath her. Her moss-green almond eyes rest somewhere out across the rooftops, the small constellation of freckles across her cheekbones picked up by the light, and the thin gold chain at her throat catches faintly against her collarbone. Full lips just barely parted in a quiet, contemplative expression, the room hushed and warm in neutral tones, a single ceramic mug steaming on the sill beside her."
+
+${OUR_DREAM_FIELDS_BLOCK}
+
+**Vivid 3-specific adjustment for ourDreamFields**: prefer natural prose for ALL 8 atomic fields — Vivid 3 reads prose best. hairStyle in particular should describe the style in flowing English (e.g. \`"long wavy voluminous hair worn loose past the shoulders with face-framing strands"\`) rather than parenthesised tags. The atomic values feed OurDream's form, but they should still echo the prose style of your other Vivid 3 blocks for maximum coherence.`;
 }
 
 export function buildProfileInferencePrompt(difficulty: Difficulty): string {
@@ -1733,7 +1996,9 @@ You are an expert scene designer for the **Vivid 2** image model on ourdream.ai.
 
 The Vivid 2 model uses a **simple tag-style** prompt format. Tags are short and either comma-separated, or written as short period-separated declarative sentences. Do NOT use weighted parentheses like \`((...))\`. Do NOT use \`Break.\` separators (those are reserved for Vivid 1). Do NOT end with "photorealistic" — the model handles realism.
 
-${existingScenesBlock(existingList)}${NO_PHYSICAL_TRAITS_BLOCK}
+${existingScenesBlock(existingList)}${REEMBED_PHYSICAL_TRAITS_BLOCK}
+
+${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 2)
 
@@ -1764,7 +2029,7 @@ Example 1 (comma-separated, action-focused):
 Example 2 (period-separated, explicit):
 \`Wearing golden hoop earrings. Black choker. Tits popping out. Oiled body. Big dick in front of face. Girls eyes locked with camera smiling horny.\`
 
-Notice: neither example describes inherent traits like skin tone, eye color, body type, or jawline — only what's happening in the scene.`;
+Notice: the reference examples above show scene-specific content ONLY — they pre-date the anchor rule. For YOUR Vivid 2 output, you MUST PREPEND the persona anchor sentence (drawn from the "Character physical anchor" block above) before the scene-specific tags. The anchor goes first as plain prose ("A 21-year-old Caucasian woman with…"), then the comma-separated scene tags follow.`;
 }
 
 function buildVivid3ScenesPrompt(
@@ -1789,7 +2054,9 @@ DO write:
 - weave camera framing, pose, action, outfit, expression, lighting, and setting into the prose naturally
 - be vivid and specific, like good cinematic writing — but always grammatical, always sentences
 
-${existingScenesBlock(existingList)}${NO_PHYSICAL_TRAITS_BLOCK}
+${existingScenesBlock(existingList)}${REEMBED_PHYSICAL_TRAITS_BLOCK}
+
+${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 3)
 
@@ -1834,7 +2101,7 @@ Vivid 3 understands these framing/lighting cues well — use them when relevant:
 - Any partner / secondary subject's position and action, when present
 - Optionally a canonical aesthetic label from the Aesthetic Vocabulary section when it fits naturally
 
-Four reference examples (different valid moods — do NOT copy literally, adapt to each scene's gathered concept):
+Five reference examples (different valid moods — do NOT copy literally, adapt to each scene's gathered concept):
 
 Example 1 (intimate, solo, indoor):
 "In the hush of late afternoon, she kneels on the pale carpet of her cluttered college apartment, lit only by the cool blue glow of a single LED strip behind the bed. She is tying her hair into a quick ponytail with a red scrunchie, head tilted slightly forward, eyes flicking up to meet the camera with a small, shy half-smile. A worn grey hoodie hangs loose from her shoulders over plain black panties, the sleeves bunched at her wrists. The frame holds tight on her face and the line of her shoulders, the rest of the messy room blurred behind her into soft, lived-in dimness."
@@ -1848,7 +2115,10 @@ Example 3 (outdoor, contemplative, late-afternoon natural light):
 Example 4 (Soft Life / Cozy aesthetic, suburban golden hour, narrative beat):
 "She stands at a shared wooden fence line in a suburban front yard, her arms wrapped around herself, one hand gently touching her cheek where she was just pinched, watching the viewer walk away with a soft, wistful expression. The scene takes place during late afternoon golden hour, with warm, direct sunlight casting a long shadow behind her, a modest house with a porch visible behind her. The whole frame leans into a Soft Life / Cozy aesthetic — comfortably ordinary, approachable, grounded in realism with authentic, casual intimacy."
 
-Notice: none of the examples mention inherent traits like skin tone, eye color, body type, or hair color — only what's happening in the scene. Examples 2 and 4 invoke aesthetics by their canonical name. All four read as continuous prose, never as tag lists.`;
+Example 5 (private self-shot smartphone snap, dawn light):
+"She is sitting on rumpled ivory sheets in her bedroom, dawn light spilling across the bed in soft golden bars. She wears a torn lace garter belt and silk stockings, one bare thigh lifted, her fingers tracing the dampness between her legs. Her lip is caught between her teeth, her gaze distant and lost in the moment. The phone is held low in her palm, capturing a private self-shot smartphone snap framed from her own perspective. The whole image carries a hushed, hyper-realistic intimacy, with natural skin texture and the unguarded warmth of a stolen private moment."
+
+Notice: the reference examples above show scene-specific prose ONLY — they pre-date the anchor rule. For YOUR Vivid 3 output, you MUST PREPEND the persona anchor sentence as the FIRST sentence of the prompt (drawn from the "Character physical anchor" block above, e.g. "A 21-year-old Caucasian woman with warm golden sun-kissed tan skin, honey blonde hair, long wavy voluminous hair, and large sparkling vivid bright blue eyes. She has a very slim lean athletic build."). After that anchor, continue with the scene-specific prose in the style shown by the examples. Examples 2 and 4 invoke canonical aesthetics; you may do the same. All five read as continuous prose, never as tag lists.`;
 }
 
 function buildVivid1ScenesPrompt(
@@ -1859,14 +2129,36 @@ function buildVivid1ScenesPrompt(
 	return `${ADULT_FICTION_BASELINE}
 You are an expert scene designer for the **Vivid 1** image model on ourdream.ai. Based on the gathering conversation, ${characterIntro(character, count)}
 
-The Vivid 1 model uses a **richly-formatted descriptive** prompt with three signature syntactic devices:
-- \`((...))\` for moderate emphasis and \`(((...)))\` for strong emphasis on key visual elements (pose, action, key visible state).
-- Underscores \`_\` to **glue short phrases together inside a single tag** (e.g. \`_looking at viewer_dancing-in the moment\`, \`black thong visible through transparent_fabric\`, \`neon_blue_and-lavendar_light\`).
-- \`Break.\` separators between logical sections of the prompt (subject, pose, outfit, expression, lighting, partner, etc.).
+The Vivid 1 model is a **photo-editorial natural-language** image model. It expects flowing photographic prose with comma-separated descriptive phrases — the way a fashion photographer or cinematographer would describe a shot. It does NOT understand tags, booru \`((keyword))\` emphasis, weighted parens like \`(keyword:1.2)\`, \`Break.\` separators, or \`_underscore_glued_phrases_\`.
 
-Do NOT collapse Vivid 1 into a flat comma list (that's Vivid 2's style). Do NOT end with "photorealistic".
+Open every scene with a photographic style preface — one of:
+- "Photorealistic candid moment …"
+- "Vivid photorealistic candid …"
+- "Hyper realistic photorealistic full body shot of …"
+- "Cinematic photorealistic editorial scene of …"
 
-${existingScenesBlock(existingList)}${NO_PHYSICAL_TRAITS_BLOCK}
+Close every scene with photo-style descriptors picked from:
+- camera/depth: "cinematic depth of field", "shallow depth of field", "softly blurred background"
+- texture: "natural skin texture", "realistic fabric details", "high detail", "sharp focus", "8k resolution"
+- style: "fashion editorial style", "professional lifestyle photography style", "candid lifestyle photography", "cinematic style"
+
+Do NOT use:
+- \`((...))\`, \`(((...)))\`, or \`(keyword:1.2)\` weighted parens
+- \`Break.\` or \`BREAK\` separators
+- \`_underscore_glued_phrases_\`
+- \`score_9\` / \`score_8_up\` boosters (those belong to Dreamy)
+- tag-only lists like "bedroom, close-up, naked, lustful"
+- a bare trailing "photorealistic" with no style descriptor
+
+DO write:
+- a single paragraph of flowing photo prose, comma-separated phrases
+- a clear photographic preface at the start
+- a sequence of small visual facts (pose, outfit, framing, light, setting)
+- a photo-style close (depth + texture + style descriptors)
+
+${existingScenesBlock(existingList)}${REEMBED_PHYSICAL_TRAITS_BLOCK}
+
+${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 1)
 
@@ -1874,23 +2166,31 @@ ${outputShapeRule(count, false)}
 
 ${sceneNameRule(count, existingList)}
 
-### prompt (REQUIRED, string — Vivid 1 sectioned style)
-A multi-sentence prompt organized into **6-10 logical sections**, each ended with \`Break.\`. Each section is a small descriptive group (sentence or fragment). Use \`((...))\` for the most important visual elements of the section, and underscores to glue tightly-related words. Cover, in roughly this order (skip sections that don't apply):
+### prompt (REQUIRED, string — Vivid 1 photo-editorial prose)
+A **single flowing paragraph** of photographic prose (typically 6-12 comma-separated phrases or 2-4 short sentences). Across the paragraph, cover (in whatever order reads best for the scene):
+- a **photographic preface** (Photorealistic / Vivid photorealistic / Hyper realistic …)
+- **camera framing / POV** (full body shot, medium shot, close-up, low angle, over-the-shoulder, partner's POV)
+- **pose / action** — what the character is doing in this moment
+- **outfit / clothing state** — what she's wearing, what is shifted / sheer / undone
+- **scene-state body details** tied to the action (e.g. "hair coming loose from its tie", "skin slick with sweat", "bare under the half-open robe") — describing what's visible IN this scene, NOT inherent body morphology
+- **setting / environment**
+- **lighting and time of day**
+- **expression and mood**
+- **partner or secondary subject** if present, with their position, outfit, and action
+- a **photo-style close** (at least two descriptors from the camera/depth, texture, and style lists above)
 
-1. **Subject & camera angle** — who is in frame, framing, what part of the body is the focus.
-2. **Pose / action** — what the character is doing, body positioning.
-3. **Outfit / clothing state** — what is worn, what is visible / covered / sheer.
-4. **Visible scene-state body details** — what the camera sees in this scene (e.g. thong strings around the waist, ass visible, dress clinging).
-5. **Expression & styling-in-action** — pursed lips, seductive gaze, hairstyle done in this moment, makeup, heels, etc.
-6. **Lighting & setting** — light color, room/place, atmosphere.
-7. **Partner / secondary subject** — if present, position relative to the main subject, what they're wearing, what they're doing.
+Three reference examples (different valid moods — do NOT copy literally, adapt to each scene's gathered concept):
 
-Reference example (do NOT copy literally, adapt to each scene's gathered concept):
+Example 1 (nightlife candid, dive bar, with off-camera dialogue):
+"Vivid photorealistic candid moment inside a crowded neighborhood dive bar at night, Riley leans forward over the wooden bar counter with her chin resting in one hand, teasing grin on her face as she talks to someone just off camera, one eyebrow slightly raised like she is delivering a sarcastic comeback, wearing a tight black crop tank and high-waisted ripped jeans, neon beer signs glowing on the walls, liquor bottles lined up behind her, a coworker rushing past carrying a metal bucket of ice, blurred customers crowding the bar trying to flag her down, a bottle of tequila in her other hand as she reaches back toward the rail, warm amber bar lighting mixed with neon highlights reflecting off glass bottles and polished wood, cinematic lifestyle photography, shallow depth of field, natural skin texture, candid nightlife energy, high detail."
 
-\`((1 female model-and 1 male model)). (( Angle is closeup of subject's torso and ass. )) (She is bent at waist _looking at viewer_dancing-in the moment). (((She is fully covered by her dress_no nudity))) Break. She is wearing navy sheer bodycon dress, (black thong visible through transparent_fabric). Break. (( viewer can see the strings from her thong as they wrap around her waist and ass)) Break. She has pursed lips, seductive gaze, high heels, Break. Her hair done fully and very sexy, elegant eye makeup, Break. (neon_blue_and-lavendar_light. glamorous aesthetic-in background), low angle shot, pre-party excitement, scene-in-crowded-nightclub. Break. Male model is (standing behind female). He is passionately kissing his lover. He has no shirt and (black dress pants on). (His left hand is extended) and is (((firmly touching females ass_caressing with just a small touch))). They are enjoying the intimate moment.\`
+Example 2 (outdoor golden hour, campus, full-body):
+"Hyper realistic photorealistic full body shot of a confident college woman standing outdoors on campus during golden hour sunset, warm natural golden light casting a soft glow across her face, relaxed poised posture with a slight hip tilt and natural stance, a wide bright genuine smile showing cute dimples, wearing a fitted blouse and high-waisted jeans with a light cardigan and ankle boots, a worn leather messenger bag slung over one shoulder, soft breeze lifting strands across her cheek, ivy-covered campus building blurred behind her with students walking past, professional lifestyle photography style, cinematic depth of field softly blurring the background, natural skin texture realistic fabric details, 8k resolution."
 
-Notice: the example describes pose, outfit, what's visible, expression, lighting, and the partner — but it does NOT describe inherent body morphology (no "curvy body", no "olive skin", no "long blonde hair"). Phrases like "dress clinging" describe the outfit's behavior in the scene, not the body itself — that's allowed. Stay on the right side of that line.
-${EMPHASIS_SYNTAX_BLOCK}`;
+Example 3 (intimate, indoor, with partner, over-the-shoulder framing):
+"Cinematic photorealistic editorial scene of a slow morning inside a sunlit minimalist loft, the camera framed over the partner's bare shoulder so the woman fills the rest of the frame, she is wrapped in a half-open cream silk robe loosely tied at the waist, leaning in with her hand resting on his chest, lips just brushing his jaw, her gaze drifting closed, the bedsheets behind her tangled and sun-warm, soft natural lighting spilling through sheer curtains, a single ceramic mug steaming on the side table, quiet intimate atmosphere, shallow depth of field, natural skin texture, candid lifestyle photography, high detail."
+
+Notice: the reference examples above show photographic preface + scene-specific prose ONLY — they pre-date the anchor rule. For YOUR Vivid 1 output, weave the persona anchor (drawn from the "Character physical anchor" block above) into the opening of the prompt — typically right after the photographic preface (e.g. "Vivid photorealistic candid moment of a 21-year-old Caucasian woman with warm golden sun-kissed tan skin, honey blonde hair, long wavy voluminous hair, and large sparkling vivid bright blue eyes, very slim lean athletic build — she leans forward over the dive-bar counter…"). After that, continue with the scene-specific photo-editorial phrases shown by the examples, and close with at least two photo-style descriptors.`;
 }
 
 function buildDreamyScenesPrompt(
@@ -1901,9 +2201,19 @@ function buildDreamyScenesPrompt(
 	return `${ADULT_FICTION_BASELINE}
 You are an expert scene designer for the **Dreamy** image model on ourdream.ai. Based on the gathering conversation, ${characterIntro(character, count)}
 
-The Dreamy model uses a **tag-style** prompt format (comma-separated short tags), NOT flowing sentences. It supports weighted emphasis with \`((...))\` for moderate emphasis and \`(...)\` for slight emphasis. It is paired with a **negative prompt** listing things the image must avoid.
+The Dreamy model uses a **booru-style tag** prompt format (comma-separated short tags), NOT flowing sentences. It supports weighted emphasis with \`((tag))\` for moderate emphasis and \`(tag)\` for slight emphasis. It is paired with a **negative prompt** listing things the image must avoid.
+
+Dreamy supports **two scene sub-formats**:
+- **Format A — Solo POV (default)**: opens with \`((pov solo)), 1girl,\` then comma-separated scene tags. The character's appearance is auto-prepended server-side by ourdream from her base character prompt, so you MUST NOT include inherent physical traits here.
+- **Format B — Multi-character with BREAK sections**: opens with \`(((1girl,1boy))) ,\` then \` , BREAK \` (space-comma-space-BREAK-space, all caps) separators between logical sections. Each subject's full description goes inside parentheses with their gender + \`score_9,score_8_up,score_7_up,\` boosters + age + ethnicity + hair + eyes + skin + body + pose + mood + outfit. Use Format B ONLY when the scene involves a partner / second subject the user must perceive directly.
+
+When to pick which sub-format:
+- Solo, POV from a single perspective → **Format A**
+- Two characters in frame, partner-driven interaction, or scene that names a specific partner → **Format B**
 
 ${existingScenesBlock(existingList)}${NO_PHYSICAL_TRAITS_BLOCK}
+
+(For Format B specifically, the no-physical-traits rule above does NOT apply — multi-character scenes MUST embed each subject's physical description because ourdream cannot auto-prepend two characters. Format A still obeys the no-physical-traits rule strictly.)
 
 ## Output Format (STRICT — Dreamy)
 
@@ -1911,7 +2221,9 @@ ${outputShapeRule(count, true)}
 
 ${sceneNameRule(count, existingList)}
 
-### prompt (REQUIRED, string — Dreamy tag style)
+### prompt (REQUIRED, string — Dreamy tag style, Format A or B)
+
+#### Format A — Solo POV (default)
 A comma-separated list of **10 to 18 short tags** (most tags are 1-6 words). Do NOT write a flowing sentence. Do NOT end with "photorealistic". Use \`((...))\` to emphasize the most defining tags (pose, key action, framing). Cover these aspects, roughly in this order:
 - Composition / framing (e.g. \`((pov solo))\`, \`1girl\`, \`close-up\`, \`from partner's POV\`)
 - Setting / environment (e.g. \`bedroom\`, \`sandy beach shoreline\`, \`dim candlelit room\`)
@@ -1922,13 +2234,35 @@ A comma-separated list of **10 to 18 short tags** (most tags are 1-6 words). Do 
 - Sensory / scene-state body details (e.g. \`breasts bouncing\`, \`bare breasts\`, \`nipples grazing partner's skin\`)
 - Background / secondary detail (e.g. \`ocean waves background\`, \`city lights visible\`)
 
-Reference example (do NOT copy literally, adapt to each scene):
+Reference example (Format A — do NOT copy literally, adapt to each scene):
 
 \`((pov solo)), 1girl, bedroom, close-up, from partner's POV, ((cowgirl position)), ((penis in vagina, riding partner slow and deep, hips circling)), riding partner, hands on partner's chest, nails raking lightly, breasts bouncing, (naked), lustful, aroused, moaning, eyes locked with partner's with raw need, cock deep inside vagina, stretching soaked walls, clenching around cock, slick heat, bare breasts, nipples grazing partner's skin\`
 
-Notice: the example describes the pose, action, and what's visible in the scene — not inherent traits like skin tone, eye color, or body type.
+Two more solo examples (different moods):
 
-### negativePrompt (REQUIRED, string — tag style)
+\`((pov solo)), 1girl, Marie's small personal condo bedroom, on the bed with rumpled sheets, kneeling on the bed, sitting back on her heels, hands resting in her lap, gaze traveling from user's face down to her own body, fingertips brushing user's knee, (naked), thoughtful, slightly overwhelmed, shy, curious, vulnerable, with a faint blush\`
+
+\`((pov solo)), 1girl, airport arrival gate interior, polished floors, fluorescent lighting, warm Manila air, full body, from slightly above to emphasize height difference, standing, hands tucked behind back, looking up at taller person, turning slightly toward exit, quick light steps, (pink dress, sandals), shy, nervous, with a warm real smile forming, cheeks flushed\`
+
+Notice: Format A examples describe pose, action, what's visible, expression, lighting — never inherent traits like skin tone, eye color, or body type.
+
+#### Format B — Multi-character with BREAK sections
+A single string built from these ordered sections, each separated by \` , BREAK \` (space-comma-space-BREAK-space, BREAK in all caps):
+
+1. Opening count tag with strong emphasis: \`(((1girl,1boy)))\` (or matching counts).
+2. **Setting + ambiance** — 1-2 short descriptive phrases of the room/place/time/mood.
+3. **Framing / camera** — 1 short phrase (e.g. "Medium shot from the side", "Close-up POV from partner's perspective").
+4. **Female subject block** wrapped in a single paren: \`([Name] is Female, score_9,score_8_up,score_7_up, [age], [ethnicity], [hair color + style], [eyes], [skin tone], [body type], [breasts size], [butt shape], ((pose)), [mood/expression], [outfit + nudity state], [position relative to partner])\`. The \`score_9,score_8_up,score_7_up\` boosters MUST appear inside the female block (no spaces between them). Wrap the key pose in \`((...))\` for emphasis.
+5. **Partner / user subject block** wrapped in a single paren: \`(User is Male, [body description], ((pose)), [mood], [clothing or nudity state], [position])\`. May reference the user's stored body description from the gathering summary if provided.
+6. Optional final closing comma / segment if there is an action detail tying the two together.
+
+Reference example (Format B — do NOT copy literally, adapt to each scene):
+
+\`(((1girl,1boy))) , BREAK Living room interior at night, dimly lit by the glow of a television screen playing a movie, comfortable couch as the central piece of furniture with a blanket draped over part of it, quiet intimate relaxed ambiance with a warm muted color palette dominated by shadows and soft screen light , BREAK Medium shot from the side, capturing the couch and the two characters in an intimate domestic moment , BREAK (Jessa Starr is Female, score_9,score_8_up,score_7_up, 25 year old, brazilian-caucasian woman, blonde hair, half-up long hair that comes down to the top of her shoulder blades, blue eyes, tan skin, slim body, large breasts, athletic butt, ((Lying on the couch with her head resting on the user's lap)), peaceful drowsy with eyes closed and a soft content smile, naked with a blanket draped over her body, curled up on the couch body relaxed and boneless) , BREAK (User is Male, a white male with a fit muscular athletic body not bulky, defined chest abs and back, deep v from abs down to pelvis, larger than average penis, short hair on the sides a little longer on top with a stylish messy look parted on the side, ((Sitting on the couch with Jessa's head on his lap)), protective affectionate looking down at Jessa with a warm gaze, clothed, sitting upright on the couch one hand gently combing through Jessa's hair) ,\`
+
+Notice: Format B reintroduces the physical descriptions of BOTH subjects explicitly because ourdream cannot auto-prepend two characters. The female block always carries \`score_9,score_8_up,score_7_up,\` boosters. The key pose for each subject is wrapped in \`((...))\` for emphasis.
+
+### negativePrompt (REQUIRED, string — tag style, applies to both formats)
 A comma-separated list of **8 to 15 short tags** describing what the image must AVOID. Combine generic quality-artifact tags with a few scene-specific exclusions that make sense for the setting/pose.
 
 Generic quality tags to include most of the time (pick 4-6): \`blurry, low quality, deformed hands, extra fingers, extra limbs, bad anatomy, watermark, text, cropped, jpeg artifacts, out of frame, disfigured\`.

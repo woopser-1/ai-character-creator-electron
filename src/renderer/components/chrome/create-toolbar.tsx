@@ -43,43 +43,49 @@ export function CreateToolbar({
 			initial={{ y: -4, opacity: 0 }}
 			transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
 		>
-			<div className="chrome-rail flex min-h-12 items-center justify-between gap-6 py-2.5">
-				<div className="flex min-w-0 items-center gap-4">
-					<span className="eyebrow shrink-0 text-foreground/55">{mark}</span>
-					<span
-						aria-hidden
-						className="hidden h-3.5 w-px shrink-0 bg-foreground/15 sm:block"
-					/>
-					<ConsoleStepper
-						activeIndex={activeIndex}
-						doneCount={doneCount}
-						status={status}
-						statusKey={statusKey}
-						steps={steps}
-					/>
-				</div>
-				<div className="flex shrink-0 items-center gap-3">
-					{config && (
-						<div className="hidden items-center gap-2 sm:flex">
-							<span className="eyebrow text-foreground/45">Tune</span>
-							<div className="flex items-center gap-1.5">{config}</div>
-						</div>
-					)}
-					{config && reset && (
+			<div className="chrome-rail @container/toolbar py-2.5">
+				<div className="flex min-h-9 items-center justify-between gap-4 @[54rem]/toolbar:min-h-12 @[54rem]/toolbar:gap-6">
+					<div className="flex min-w-0 flex-1 items-center gap-3 @[54rem]/toolbar:gap-4">
+						<span className="eyebrow hidden shrink-0 text-foreground/55 @[20rem]/toolbar:inline">
+							{mark}
+						</span>
 						<span
 							aria-hidden
-							className="hidden h-3.5 w-px bg-foreground/15 sm:block"
+							className="hidden h-3.5 w-px shrink-0 bg-foreground/15 @[20rem]/toolbar:block"
 						/>
-					)}
-					{reset}
+						<ConsoleStepper
+							activeIndex={activeIndex}
+							doneCount={doneCount}
+							status={status}
+							statusKey={statusKey}
+							steps={steps}
+						/>
+					</div>
+					<div className="flex shrink-0 items-center gap-3">
+						{config && (
+							<div className="hidden items-center gap-2 @[54rem]/toolbar:flex">
+								<span className="eyebrow text-foreground/45">Tune</span>
+								<div className="flex items-center gap-1.5">{config}</div>
+							</div>
+						)}
+						{config && reset && (
+							<span
+								aria-hidden
+								className="hidden h-3.5 w-px bg-foreground/15 @[54rem]/toolbar:block"
+							/>
+						)}
+						{reset}
+					</div>
 				</div>
+				{config && (
+					<div className="mt-2 flex items-center gap-2 border-foreground/8 border-t pt-2 @[54rem]/toolbar:hidden">
+						<span className="eyebrow shrink-0 text-foreground/45">Tune</span>
+						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+							{config}
+						</div>
+					</div>
+				)}
 			</div>
-			{config && (
-				<div className="chrome-rail flex items-center gap-2 border-foreground/8 border-t pb-2 pt-1.5 sm:hidden">
-					<span className="eyebrow text-foreground/45">Tune</span>
-					<div className="flex flex-wrap items-center gap-1.5">{config}</div>
-				</div>
-			)}
 		</motion.div>
 	);
 }
@@ -103,11 +109,17 @@ function ConsoleStepper({
 				const done = i < doneCount;
 				const active = i === activeIndex && !done;
 				return (
-					<li className="flex shrink-0 items-center gap-1.5" key={step.id}>
+					<li
+						className={cn(
+							"flex items-center gap-1.5",
+							active ? "min-w-0 flex-shrink" : "shrink-0",
+						)}
+						key={step.id}
+					>
 						<motion.div
 							animate={{ opacity: 1, y: 0 }}
 							className={cn(
-								"relative inline-flex items-baseline gap-2",
+								"relative inline-flex min-w-0 items-baseline gap-2",
 								done && "text-foreground/65",
 								active && "text-foreground",
 								!done && !active && "text-foreground/35",
@@ -156,30 +168,32 @@ function ConsoleStepper({
 							</span>
 							<span
 								className={cn(
-									"-tracking-[0.005em] font-semibold text-[0.875rem] leading-none",
-									!active && !done && "hidden sm:inline",
+									"-tracking-[0.005em] truncate font-semibold text-[0.875rem] leading-none",
+									!active && !done && "hidden @[26rem]/toolbar:inline",
 								)}
 							>
 								{step.label}
 							</span>
 							{active && status && (
-								<span className="ml-2 hidden min-w-0 items-baseline md:flex">
+								<span className="ml-2 hidden min-w-0 items-baseline @[32rem]/toolbar:flex">
 									<span
 										aria-hidden
-										className="mr-2 inline-block h-1 w-1 rounded-full bg-foreground/25"
+										className="mr-2 inline-block h-1 w-1 shrink-0 rounded-full bg-foreground/25"
 									/>
-									<AnimatePresence initial={false} mode="wait">
-										<motion.span
-											animate={{ opacity: 1, y: 0 }}
-											className="truncate font-medium text-[11px] text-foreground/55 uppercase tracking-[0.16em]"
-											exit={{ opacity: 0, y: -3 }}
-											initial={{ opacity: 0, y: 3 }}
-											key={statusKey ?? status}
-											transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-										>
-											{status}
-										</motion.span>
-									</AnimatePresence>
+									<span className="relative min-w-0 flex-1 overflow-hidden">
+										<AnimatePresence initial={false} mode="wait">
+											<motion.span
+												animate={{ opacity: 1, y: 0 }}
+												className="block truncate font-medium text-[11px] text-foreground/55 uppercase tracking-[0.16em]"
+												exit={{ opacity: 0, y: -3 }}
+												initial={{ opacity: 0, y: 3 }}
+												key={statusKey ?? status}
+												transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+											>
+												{status}
+											</motion.span>
+										</AnimatePresence>
+									</span>
 								</span>
 							)}
 						</motion.div>

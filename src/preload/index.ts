@@ -256,8 +256,9 @@ const api = {
     },
   },
   chat: {
-    start: (payload: StartChatPayload): Promise<StartChatResult> =>
-      ipcRenderer.invoke("chat:start", payload),
+    start: (
+      payload: StartChatPayload & { sessionId?: string },
+    ): Promise<StartChatResult> => ipcRenderer.invoke("chat:start", payload),
     send: (sessionId: string, text: string): Promise<void> =>
       ipcRenderer.invoke("chat:send", { sessionId, text }),
     toolOutput: (sessionId: string, toolCallId: string, output: string): Promise<void> =>
@@ -266,12 +267,14 @@ const api = {
     restart: (
       payload:
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-character";
             replayTranscript: string;
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-scenes";
             character: Character;
@@ -279,6 +282,7 @@ const api = {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-scene";
             character: Character;
@@ -287,6 +291,7 @@ const api = {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "refine-scene";
             character: Character;
@@ -296,6 +301,7 @@ const api = {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-regenerate";
             character: StoredCharacter;

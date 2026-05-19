@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
 
 function synthGatheringSummary(data: StoredCharacter): string {
 	const c = data.character;
-	return [
+	const lines = [
 		`Character: ${c.firstName} ${c.lastName}.`,
 		`Difficulty: ${data.difficulty}.`,
 		`Personality: ${c.personalityLabel}.`,
@@ -62,6 +62,23 @@ function synthGatheringSummary(data: StoredCharacter): string {
 		"",
 		`Physical: ${c.customPhysicalDetails}`,
 		`Face: ${c.customFaceDetails}`,
+	];
+	if (c.ourDreamFields) {
+		const odf = c.ourDreamFields;
+		lines.push(
+			"",
+			"OurDream atomic fields:",
+			`- ethnicity: ${odf.ethnicity}`,
+			`- skinColor: ${odf.skinColor}`,
+			`- hairColor: ${odf.hairColor}`,
+			`- hairStyle: ${odf.hairStyle}`,
+			`- eyeColor: ${odf.eyeColor}`,
+			`- bodyType: ${odf.bodyType}`,
+			`- breastSize: ${odf.breastSize}`,
+			`- buttSize: ${odf.buttSize}`,
+		);
+	}
+	lines.push(
 		"",
 		`Personality details:`,
 		c.additionalPersonalityDetails,
@@ -71,7 +88,8 @@ function synthGatheringSummary(data: StoredCharacter): string {
 		"",
 		`Current scenario:`,
 		c.scenario,
-	].join("\n");
+	);
+	return lines.join("\n");
 }
 
 export function CharacterDetailPage({ id }: { id: string }) {
@@ -145,6 +163,31 @@ export function CharacterDetailPage({ id }: { id: string }) {
 		return () => window.removeEventListener("keydown", handler);
 	}, [data, exportBusy, handleExport]);
 
+	const handleRegenerateFromMessage = useCallback(
+		({ messageId }: { messageId: string }) => {
+			if (!data) return;
+			const messages = data.gatheringMessages;
+			if (!messages) return;
+			const clickedIdx = messages.findIndex((m) => m.id === messageId);
+			if (clickedIdx < 0) return;
+			// Keep messages up to AND INCLUDING the clicked one — the user is
+			// telling us "this is where the gathering effectively ended".
+			const gatheringMessages = messages.slice(0, clickedIdx + 1);
+			if (gatheringMessages.length === 0) return;
+			const seed: ReplaySeed = {
+				kind: "regenerate-from-gathering",
+				originCharacterId: data.id,
+				difficulty: data.difficulty,
+				messageLength: data.messageLength,
+				imageModel: data.imageModel,
+				gatheringMessages,
+			};
+			setReplaySeed(seed);
+			navigate("/create");
+		},
+		[data],
+	);
+
 	const handleRestartFromMessage = useCallback(
 		({ phase, messageId }: { phase: "character" | "scenes"; messageId: string }) => {
 			if (!data) return;
@@ -153,17 +196,27 @@ export function CharacterDetailPage({ id }: { id: string }) {
 					? data.gatheringMessages
 					: data.sceneGatheringMessages;
 			if (!messages) return;
-			const idx = messages.findIndex((m) => m.id === messageId);
-			if (idx < 0) return;
-			const target = messages[idx];
-			if (target.role !== "user") return;
-			const newMessage = target.parts
+			const clickedIdx = messages.findIndex((m) => m.id === messageId);
+			if (clickedIdx < 0) return;
+
+			// Resolve the anchor user message. Clicking a user message forks at
+			// that message; clicking an assistant message walks back to the prior
+			// user turn (regenerate-from-here semantic), so any message in the
+			// chat — including tool-output-only assistant turns — is a valid
+			// resume point.
+			let userIdx = clickedIdx;
+			if (messages[clickedIdx].role !== "user") {
+				while (userIdx >= 0 && messages[userIdx].role !== "user") userIdx--;
+			}
+			if (userIdx < 0) return;
+			const anchor = messages[userIdx];
+			const newMessage = anchor.parts
 				.filter((p) => p.type === "text")
 				.map((p) => (p as { text: string }).text)
 				.join("\n")
 				.trim();
 			if (!newMessage) return;
-			const truncatedMessages = messages.slice(0, idx);
+			const truncatedMessages = messages.slice(0, userIdx);
 
 			const seed: ReplaySeed =
 				phase === "character"
@@ -278,6 +331,7 @@ export function CharacterDetailPage({ id }: { id: string }) {
 						actions={actions}
 						data={data}
 						onRefineScene={(idx) => setRefineSceneIndex(idx)}
+						onRegenerateFromMessage={handleRegenerateFromMessage}
 						onRestartFromMessage={handleRestartFromMessage}
 					/>
 				</main>

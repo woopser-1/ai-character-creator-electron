@@ -24,13 +24,19 @@ import { Button } from "@/components/ui/button";
 import { CollapsibleField } from "@/components/ui/collapsible-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
-import type { Measurements, MoodAxis, StoredCharacter } from "@/lib/types";
+import type {
+	Measurements,
+	MoodAxis,
+	OurDreamFields,
+	StoredCharacter,
+} from "@/lib/types";
 import {
 	DIFFICULTY_META,
 	getFullName,
 	getStoredImageModel,
 	IMAGE_MODEL_META,
 	MESSAGE_LENGTH_META,
+	OUR_DREAM_FIELD_KEYS,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +50,7 @@ interface CharacterReviewProps {
 		phase: GatheringPhase;
 		messageId: string;
 	}) => void;
+	onRegenerateFromMessage?: (params: { messageId: string }) => void;
 }
 
 interface CharacterIdentityProps {
@@ -243,6 +250,37 @@ function MoodAxisMeter({ axis }: { axis: MoodAxis }) {
 	);
 }
 
+const OUR_DREAM_FIELD_LABELS: Record<keyof OurDreamFields, string> = {
+	ethnicity: "Ethnicity",
+	skinColor: "Skin color",
+	bodyType: "Body type",
+	breastSize: "Breast size",
+	buttSize: "Butt size",
+	hairColor: "Hair color",
+	hairStyle: "Hair style",
+	eyeColor: "Eye color",
+};
+
+function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
+	return (
+		<div className="space-y-4">
+			<div className="eyebrow text-foreground/55">
+				Atomic values for the OurDream creation form
+			</div>
+			<dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{OUR_DREAM_FIELD_KEYS.map((key) => (
+					<Field
+						key={key}
+						label={OUR_DREAM_FIELD_LABELS[key]}
+						mono
+						value={fields[key]}
+					/>
+				))}
+			</dl>
+		</div>
+	);
+}
+
 function MeasurementsGrid({ measurements }: { measurements: Measurements }) {
 	const items: { label: string; value: string }[] = [
 		{ label: "Height", value: `${measurements.heightCm} cm` },
@@ -369,6 +407,7 @@ export function CharacterReview({
 	data,
 	onRefineScene,
 	onRestartFromMessage,
+	onRegenerateFromMessage,
 }: CharacterReviewProps) {
 	const { character, scenes } = data;
 	const imageModel = getStoredImageModel(data);
@@ -452,9 +491,19 @@ export function CharacterReview({
 						/>
 					</Section>
 
+					{character.ourDreamFields && (
+						<Section
+							icon={<Palette className="h-4 w-4" />}
+							index={4}
+							title="OurDream atomic fields"
+						>
+							<OurDreamFieldsGrid fields={character.ourDreamFields} />
+						</Section>
+					)}
+
 					<Section
 						icon={<Eye className="h-4 w-4" />}
-						index={4}
+						index={character.ourDreamFields ? 5 : 4}
 						title="Public description"
 					>
 						<CollapsibleField label="" value={character.publicDescription} />
@@ -462,7 +511,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<Image className="h-4 w-4" />}
-						index={5}
+						index={character.ourDreamFields ? 6 : 5}
 						title="Image generation prompt"
 					>
 						<Field
@@ -722,6 +771,7 @@ export function CharacterReview({
 						characterMessages={data.gatheringMessages}
 						sceneMessages={data.sceneGatheringMessages}
 						gatheringSummary={data.gatheringSummary}
+						onRegenerateFromMessage={onRegenerateFromMessage}
 						onRestartFromMessage={onRestartFromMessage}
 					/>
 				</TabsContent>
@@ -738,6 +788,7 @@ interface GatheringTabProps {
 		phase: GatheringPhase;
 		messageId: string;
 	}) => void;
+	onRegenerateFromMessage?: (params: { messageId: string }) => void;
 }
 
 function GatheringTab({
@@ -745,6 +796,7 @@ function GatheringTab({
 	sceneMessages,
 	gatheringSummary,
 	onRestartFromMessage,
+	onRegenerateFromMessage,
 }: GatheringTabProps) {
 	const hasCharacterMessages =
 		characterMessages && characterMessages.length > 0;
@@ -763,6 +815,11 @@ function GatheringTab({
 				>
 					<GatheringTranscript
 						messages={characterMessages}
+						onRegenerateFromMessage={
+							onRegenerateFromMessage
+								? (id) => onRegenerateFromMessage({ messageId: id })
+								: undefined
+						}
 						onRestartFromMessage={
 							onRestartFromMessage
 								? (id) =>
@@ -820,30 +877,73 @@ function noopAddToolOutput() {}
 function GatheringTranscript({
 	messages,
 	onRestartFromMessage,
+	onRegenerateFromMessage,
 }: {
 	messages: UIMessage[];
 	onRestartFromMessage?: (messageId: string) => void;
+	onRegenerateFromMessage?: (messageId: string) => void;
 }) {
+	// For assistant messages we walk back to find the prior user turn — if none
+	// exists (e.g. the very first message is an assistant greeting), restart
+	// can't fork there, so we skip the Restart button on those messages.
+	const hasPriorUserMessage = (idx: number): boolean => {
+		for (let i = idx - 1; i >= 0; i--) {
+			if (messages[i].role === "user") return true;
+		}
+		return false;
+	};
+
 	return (
 		<div className="flex flex-col gap-4">
-			{messages.map((msg) => (
-				<div className="group/turn relative" key={msg.id}>
-					<ChatMessage addToolOutput={noopAddToolOutput} message={msg} />
-					{onRestartFromMessage && msg.role === "user" && (
-						<div className="mt-1 flex justify-end pr-10">
-							<Button
-								className="text-muted-foreground hover:text-primary"
-								onClick={() => onRestartFromMessage(msg.id)}
-								size="sm"
-								variant="ghost"
+			{messages.map((msg, idx) => {
+				const canRestart =
+					!!onRestartFromMessage &&
+					(msg.role === "user" || hasPriorUserMessage(idx));
+				// Regenerate works at any message because it skips the chat entirely
+				// — it just snapshots the transcript up to and including this message
+				// and goes straight to profile review.
+				const canRegenerate = !!onRegenerateFromMessage;
+				const showRow = canRestart || canRegenerate;
+				const alignRight = msg.role === "user";
+				return (
+					<div className="group/turn relative" key={msg.id}>
+						<ChatMessage addToolOutput={noopAddToolOutput} message={msg} />
+						{showRow && (
+							<div
+								className={cn(
+									"mt-1 flex flex-wrap items-center gap-1",
+									alignRight ? "justify-end pr-10" : "justify-start pl-10",
+								)}
 							>
-								<RotateCcw className="h-3 w-3" />
-								Restart from here
-							</Button>
-						</div>
-					)}
-				</div>
-			))}
+								{canRegenerate && (
+									<Button
+										className="text-muted-foreground hover:text-primary"
+										onClick={() => onRegenerateFromMessage?.(msg.id)}
+										size="sm"
+										title="Skip the chat and go straight to profile review using the gathering up to this point"
+										variant="ghost"
+									>
+										<Wand2 className="h-3 w-3" />
+										Regenerate from here
+									</Button>
+								)}
+								{canRestart && (
+									<Button
+										className="text-muted-foreground hover:text-primary"
+										onClick={() => onRestartFromMessage?.(msg.id)}
+										size="sm"
+										title="Restart the gathering chat from this point"
+										variant="ghost"
+									>
+										<RotateCcw className="h-3 w-3" />
+										Restart chat from here
+									</Button>
+								)}
+							</div>
+						)}
+					</div>
+				);
+			})}
 		</div>
 	);
 }

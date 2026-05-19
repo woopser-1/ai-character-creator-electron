@@ -24,7 +24,24 @@ export interface ScenesReplaySeed {
 	newMessage: string;
 }
 
-export type ReplaySeed = CharacterReplaySeed | ScenesReplaySeed;
+// Skip the gathering chat entirely and go straight to the profile review screen
+// using the message history as-is. Useful when the user just wants to retune the
+// generation pipeline without re-running the interactive gather.
+export interface RegenerateFromGatheringSeed {
+	kind: "regenerate-from-gathering";
+	originCharacterId: string;
+	difficulty: StoredCharacter["difficulty"];
+	messageLength?: StoredCharacter["messageLength"];
+	imageModel?: StoredCharacter["imageModel"];
+	// Snapshot of messages up to (and including) the user's chosen anchor —
+	// rendered in /create's transcript so the user can verify the slice.
+	gatheringMessages: UIMessage[];
+}
+
+export type ReplaySeed =
+	| CharacterReplaySeed
+	| ScenesReplaySeed
+	| RegenerateFromGatheringSeed;
 
 export function setReplaySeed(seed: ReplaySeed): void {
 	try {

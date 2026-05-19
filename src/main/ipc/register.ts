@@ -1086,7 +1086,7 @@ export function registerIpc(window: BrowserWindow): void {
     "chat:start",
     async (
       _event,
-      payload:
+      payload: (
         | { flow: "gather-character"; initialUserMessage: string }
         | {
             flow: "gather-scenes";
@@ -1111,6 +1111,7 @@ export function registerIpc(window: BrowserWindow): void {
             character: StoredCharacter;
             initialUserMessage: string;
           }
+      ) & { sessionId?: string }
     ) => {
       try {
         let gatherFlow: GatherFlow;
@@ -1143,7 +1144,8 @@ export function registerIpc(window: BrowserWindow): void {
           window,
           payload.initialUserMessage,
           undefined,
-          settings.generationModel
+          settings.generationModel,
+          payload.sessionId
         );
         return { success: true, sessionId };
       } catch (err) {
@@ -1177,14 +1179,16 @@ export function registerIpc(window: BrowserWindow): void {
     "chat:restart",
     async (
       _event,
-      payload:
+      payload: (
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-character";
             replayTranscript: string;
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-scenes";
             character: Character;
@@ -1192,6 +1196,7 @@ export function registerIpc(window: BrowserWindow): void {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-scene";
             character: Character;
@@ -1200,6 +1205,7 @@ export function registerIpc(window: BrowserWindow): void {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "refine-scene";
             character: Character;
@@ -1209,12 +1215,14 @@ export function registerIpc(window: BrowserWindow): void {
             newMessage: string;
           }
         | {
+            sessionId?: string;
             oldSessionId?: string;
             flow: "gather-regenerate";
             character: StoredCharacter;
             replayTranscript: string;
             newMessage: string;
           }
+      )
     ) => {
       if (payload.oldSessionId) stopSession(payload.oldSessionId);
       try {
@@ -1248,7 +1256,8 @@ export function registerIpc(window: BrowserWindow): void {
           window,
           payload.newMessage,
           payload.replayTranscript,
-          settings.generationModel
+          settings.generationModel,
+          payload.sessionId
         );
         return { success: true as const, sessionId };
       } catch (err) {

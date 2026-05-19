@@ -156,6 +156,14 @@ export function useAgentChat(
 	}, [handleEvent]);
 
 	const start = useCallback(async (payload: StartChatPayload) => {
+		// Pre-generate the session id in the renderer and stamp the ref BEFORE
+		// the IPC call. Events from main (chat:event) and the IPC reply travel
+		// on independent channels with no ordering guarantee — if events landed
+		// before we set sessionIdRef.current they used to be dropped by the
+		// filter in handleEvent, leaving the chat stuck on "submitted".
+		const sid = nanoid();
+		sessionIdRef.current = sid;
+		setSessionId(sid);
 		setStatus("submitted");
 		setError(null);
 		setFinalSummary(null);
@@ -168,14 +176,14 @@ export function useAgentChat(
 				parts: [{ type: "text", text: initialText }],
 			},
 		]);
-		const result = await window.api.chat.start(payload);
+		const result = await window.api.chat.start({ ...payload, sessionId: sid });
 		if (!result.success) {
+			sessionIdRef.current = null;
+			setSessionId(null);
 			setStatus("error");
 			setError(result.error);
 			return;
 		}
-		sessionIdRef.current = result.sessionId;
-		setSessionId(result.sessionId);
 	}, []);
 
 	const restart = useCallback(
@@ -184,6 +192,13 @@ export function useAgentChat(
 			if (!payload) return;
 			const oldSessionId = sessionIdRef.current ?? undefined;
 			const replayTranscript = serializeTranscriptForReplay(truncated);
+			// Pre-generate the new session id in the renderer and stamp the ref
+			// BEFORE the IPC call. See `start` above — without this, the first
+			// few chat:event messages from main race the IPC reply and get
+			// dropped by handleEvent's sessionId filter, freezing the chat.
+			const sid = nanoid();
+			sessionIdRef.current = sid;
+			setSessionId(sid);
 			setStatus("submitted");
 			setError(null);
 			setFinalSummary(null);
@@ -198,6 +213,7 @@ export function useAgentChat(
 			const restartPayload =
 				payload.flow === "gather-character"
 					? {
+							sessionId: sid,
 							oldSessionId,
 							flow: "gather-character" as const,
 							replayTranscript,
@@ -205,6 +221,7 @@ export function useAgentChat(
 						}
 					: payload.flow === "gather-scenes"
 						? {
+								sessionId: sid,
 								oldSessionId,
 								flow: "gather-scenes" as const,
 								character: payload.character,
@@ -213,6 +230,7 @@ export function useAgentChat(
 							}
 						: payload.flow === "gather-scene"
 							? {
+									sessionId: sid,
 									oldSessionId,
 									flow: "gather-scene" as const,
 									character: payload.character,
@@ -222,6 +240,7 @@ export function useAgentChat(
 								}
 							: payload.flow === "refine-scene"
 								? {
+										sessionId: sid,
 										oldSessionId,
 										flow: "refine-scene" as const,
 										character: payload.character,
@@ -231,6 +250,7 @@ export function useAgentChat(
 										newMessage,
 									}
 								: {
+										sessionId: sid,
 										oldSessionId,
 										flow: "gather-regenerate" as const,
 										character: payload.character,
@@ -239,12 +259,12 @@ export function useAgentChat(
 									};
 			const result = await window.api.chat.restart(restartPayload);
 			if (!result.success) {
+				sessionIdRef.current = null;
+				setSessionId(null);
 				setStatus("error");
 				setError(result.error);
 				return;
 			}
-			sessionIdRef.current = result.sessionId;
-			setSessionId(result.sessionId);
 			setStatus("streaming");
 		},
 		[],
