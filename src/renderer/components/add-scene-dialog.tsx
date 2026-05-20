@@ -168,16 +168,18 @@ export function AddSceneDialog({
 								</p>
 							</div>
 						)}
-						{chat.messages.map((msg) => (
+						{chat.messages.map((msg, idx) => (
 							<ChatMessage
 								addToolOutput={chat.addToolOutput}
 								key={msg.id}
 								message={msg}
+								noPriorUserTurn={
+									msg.role === "assistant" &&
+									!chat.messages.slice(0, idx).some((m) => m.role === "user")
+								}
 								onDelete={!isStreaming ? chat.deleteMessage : undefined}
 								onEdit={!isStreaming ? chat.editAndResend : undefined}
-								onRegenerateFrom={
-									!isStreaming ? chat.regenerateFrom : undefined
-								}
+								onRewind={!isStreaming ? chat.rewindTo : undefined}
 							/>
 						))}
 

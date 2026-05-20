@@ -87,6 +87,15 @@ function formatConfirmedProfileBlock(profile: ConfirmedProfile): string {
   lines.push(`- secondary.highDescriptor: ${s.highDescriptor}`);
   lines.push(`- secondary.startingValue: ${s.startingValue}`);
   if (s.reasoning) lines.push(`  reasoning: ${s.reasoning}`);
+  if (profile.moodAxes.hidden && profile.moodAxes.hidden.length > 0) {
+    profile.moodAxes.hidden.forEach((h, idx) => {
+      lines.push(`- hidden[${idx}].label: ${h.label}`);
+      lines.push(`- hidden[${idx}].lowDescriptor: ${h.lowDescriptor}`);
+      lines.push(`- hidden[${idx}].highDescriptor: ${h.highDescriptor}`);
+      lines.push(`- hidden[${idx}].startingValue: ${h.startingValue}`);
+      if (h.reasoning) lines.push(`  reasoning: ${h.reasoning}`);
+    });
+  }
   return lines.join("\n");
 }
 
@@ -142,7 +151,7 @@ const VISUAL_USER_MESSAGE = (gatheringSummary: string): string =>
     "",
     gatheringSummary,
     "",
-    "Now generate ONLY the four visual fields (customPhysicalDetails, customFaceDetails, baseGenerationPrompt, baseImagePrompt) as structured JSON. Produce a single coherent person consistent across all four fields.",
+    "Now generate ONLY the six visual fields (age, customPhysicalDetails, customFaceDetails, baseGenerationPrompt, baseImagePrompt, ourDreamFields) as structured JSON. The ourDreamFields object MUST include the 9 atomic values (hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor, tags). Produce a single coherent person consistent across all blocks. The integer age MUST match the age phrasing woven into baseGenerationPrompt and baseImagePrompt.",
     "",
     "CRITICAL: respect the explicit physical answers captured in the gathering summary — body type, height, bust size, skin tone, hair color and length, hair texture, eye color, distinguishing features (freckles, tattoos, piercings, scars, glasses, etc.), and style/aesthetic. Do NOT invent contradicting traits. Every physical choice the user made must appear in customPhysicalDetails and customFaceDetails and be reflected (with appropriate weighting) in baseGenerationPrompt and baseImagePrompt.",
     "",

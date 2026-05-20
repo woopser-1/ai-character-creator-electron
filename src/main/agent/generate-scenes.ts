@@ -87,8 +87,8 @@ async function runScenesOnce(
     enforcedCount !== undefined
       ? `The \`scenes\` array MUST have exactly ${enforcedCount} items — not more, not fewer.`
       : "Match the final count from the summary precisely. If the summary lists 3 scenes, return 3; if it lists 7, return 7.",
-    "Each scene MUST include BOTH a `sceneName` (short descriptive name) and a `prompt` (full image prompt).",
-    "Do NOT omit `sceneName` — it is required by the schema and will fail validation otherwise.",
+    "Each scene MUST include `sceneName` (short descriptive name), `prompt` (full image prompt) AND `negativePrompt` (8-15 comma-separated tags of things to avoid — supported by ALL image models now, not just Dreamy).",
+    "Do NOT omit `sceneName` or `negativePrompt` — both are required and missing fields will fail schema validation.",
   ].join("\n");
 
   const startedAt = Date.now();
@@ -318,7 +318,7 @@ async function runSingleSceneOnce(
     gatheringSummary,
     "",
     "Now generate ONE scene as a structured JSON object matching the schema.",
-    "The object MUST have a single `scene` field containing BOTH `sceneName` (short descriptive name, distinct from existing scenes) and `prompt` (full image prompt).",
+    "The object MUST have a single `scene` field containing `sceneName` (short descriptive name, distinct from existing scenes), `prompt` (full image prompt) AND `negativePrompt` (8-15 comma-separated tags of things to avoid — supported by ALL image models now).",
     "Do NOT return an array or multiple scenes — exactly one scene.",
   ].join("\n");
 

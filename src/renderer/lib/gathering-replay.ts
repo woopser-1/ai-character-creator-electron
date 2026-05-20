@@ -3,9 +3,18 @@ import type { Character, StoredCharacter } from "@shared/schemas";
 
 const STORAGE_KEY = "ai-cc:gathering-replay-seed";
 
-export interface CharacterReplaySeed {
-	kind: "gather-character";
-	originCharacterId: string;
+/**
+ * Fork a completed character's gathering into a brand new draft.
+ *
+ * The user clicked Rewind on a message in CharacterDetail; we open /create with
+ * a pre-allocated draftId so autosave starts immediately, and we keep
+ * `sourceCharacterId` so the produced character can trace its origin without
+ * touching the original.
+ */
+export interface CharacterRewindSeed {
+	kind: "rewind-character";
+	draftId: string;
+	sourceCharacterId: string;
 	difficulty: StoredCharacter["difficulty"];
 	messageLength?: StoredCharacter["messageLength"];
 	imageModel?: StoredCharacter["imageModel"];
@@ -13,8 +22,14 @@ export interface CharacterReplaySeed {
 	newMessage: string;
 }
 
-export interface ScenesReplaySeed {
-	kind: "gather-scenes";
+/**
+ * Rewind into the scene-gathering of an existing character. The character
+ * itself stays put (same id), only the scene-gathering chat reruns from the
+ * chosen point; the eventual `generate:scenes` call will overwrite the
+ * character's `scenes` and `sceneGatheringMessages` in place.
+ */
+export interface ScenesRewindSeed {
+	kind: "rewind-scenes";
 	originCharacterId: string;
 	character: Character;
 	difficulty: StoredCharacter["difficulty"];
@@ -24,24 +39,7 @@ export interface ScenesReplaySeed {
 	newMessage: string;
 }
 
-// Skip the gathering chat entirely and go straight to the profile review screen
-// using the message history as-is. Useful when the user just wants to retune the
-// generation pipeline without re-running the interactive gather.
-export interface RegenerateFromGatheringSeed {
-	kind: "regenerate-from-gathering";
-	originCharacterId: string;
-	difficulty: StoredCharacter["difficulty"];
-	messageLength?: StoredCharacter["messageLength"];
-	imageModel?: StoredCharacter["imageModel"];
-	// Snapshot of messages up to (and including) the user's chosen anchor —
-	// rendered in /create's transcript so the user can verify the slice.
-	gatheringMessages: UIMessage[];
-}
-
-export type ReplaySeed =
-	| CharacterReplaySeed
-	| ScenesReplaySeed
-	| RegenerateFromGatheringSeed;
+export type ReplaySeed = CharacterRewindSeed | ScenesRewindSeed;
 
 export function setReplaySeed(seed: ReplaySeed): void {
 	try {

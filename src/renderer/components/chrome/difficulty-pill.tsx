@@ -23,7 +23,7 @@ export function DifficultyPill({
 		return (
 			<div className="inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary px-2.5 font-medium text-muted-foreground text-xs">
 				<Shield className="h-3 w-3" />
-				Difficulty: {meta.label}
+				{meta.label}
 			</div>
 		);
 	}
@@ -32,7 +32,7 @@ export function DifficultyPill({
 		<Popover.Root>
 			<Popover.Trigger className={PILL_BASE}>
 				<Shield className="h-3 w-3" />
-				Difficulty: {meta.label}
+				{meta.label}
 			</Popover.Trigger>
 			<Popover.Portal>
 				<Popover.Positioner align="end" sideOffset={8}>

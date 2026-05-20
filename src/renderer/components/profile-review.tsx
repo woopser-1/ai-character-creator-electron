@@ -316,6 +316,13 @@ export function ProfileReview({
 							? undefined
 							: draft.moodAxes.secondary.reasoning,
 				},
+				hidden: draft.moodAxes.hidden?.map((a) => ({
+					label: a.label,
+					lowDescriptor: a.lowDescriptor,
+					highDescriptor: a.highDescriptor,
+					startingValue: a.startingValue,
+					reasoning: a.reasoning,
+				})),
 			} satisfies ConfirmedMoodAxes,
 		};
 		onConfirm({ measurements: draft.measurements, profile });

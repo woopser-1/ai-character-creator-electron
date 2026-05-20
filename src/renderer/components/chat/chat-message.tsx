@@ -19,7 +19,16 @@ interface ChatMessageProps {
 	message: UIMessage;
 	onDelete?: (id: string) => void;
 	onEdit?: (id: string, newText: string) => void;
-	onRegenerateFrom?: (id: string) => void;
+	/**
+	 * Rewind the conversation to this message. The IA resumes naturally from
+	 * here as if the chat had been pre-filled up to this point.
+	 */
+	onRewind?: (id: string) => void;
+	/**
+	 * When true, this message has no prior user turn to walk back to (e.g. the
+	 * very first assistant greeting). Disables the Rewind button on it.
+	 */
+	noPriorUserTurn?: boolean;
 }
 
 function ToolThinkingIndicator() {
@@ -49,7 +58,8 @@ export function ChatMessage({
 	addToolOutput,
 	onDelete,
 	onEdit,
-	onRegenerateFrom,
+	onRewind,
+	noPriorUserTurn,
 }: ChatMessageProps) {
 	const isUser = message.role === "user";
 	const [editing, setEditing] = useState(false);
@@ -57,7 +67,8 @@ export function ChatMessage({
 
 	const hasText = message.parts.some((p) => p.type === "text");
 	const editable = isUser && hasText && !!onEdit;
-	const showActions = !!(onDelete || onEdit || onRegenerateFrom) && !editing;
+	const rewindable = !!onRewind && (isUser || !noPriorUserTurn);
+	const showActions = !!(onDelete || onEdit || onRewind) && !editing;
 
 	const handleBeginEdit = () => {
 		setDraft(collectText(message));
@@ -262,12 +273,12 @@ export function ChatMessage({
 								<Pencil className="h-3 w-3" />
 							</button>
 						)}
-						{!isUser && onRegenerateFrom && (
+						{rewindable && (
 							<button
-								aria-label="Regenerate from here"
+								aria-label="Rewind to here"
 								className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 ease-out hover:bg-muted hover:text-foreground"
-								onClick={() => onRegenerateFrom(message.id)}
-								title="Regenerate from here"
+								onClick={() => onRewind?.(message.id)}
+								title="Rewind to here"
 								type="button"
 							>
 								<RotateCcw className="h-3 w-3" />

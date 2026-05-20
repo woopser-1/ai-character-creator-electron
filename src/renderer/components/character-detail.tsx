@@ -36,7 +36,6 @@ import {
 	getStoredImageModel,
 	IMAGE_MODEL_META,
 	MESSAGE_LENGTH_META,
-	OUR_DREAM_FIELD_KEYS,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +45,15 @@ interface CharacterReviewProps {
 	data: StoredCharacter;
 	actions?: ReactNode;
 	onRefineScene?: (sceneIndex: number) => void;
-	onRestartFromMessage?: (params: {
+	/**
+	 * Fork the conversation from the given message. The character phase forks
+	 * into a brand-new character; the scenes phase re-runs scene gathering on
+	 * the same character. The chat naturally resumes from this point.
+	 */
+	onRewindFromMessage?: (params: {
 		phase: GatheringPhase;
 		messageId: string;
 	}) => void;
-	onRegenerateFromMessage?: (params: { messageId: string }) => void;
 }
 
 interface CharacterIdentityProps {
@@ -143,12 +146,14 @@ function Field({
 function Section({
 	index,
 	title,
+	subtitle,
 	icon,
 	tag,
 	children,
 }: {
 	index: number;
 	title: string;
+	subtitle?: string;
 	icon: React.ReactNode;
 	tag?: string;
 	children: React.ReactNode;
@@ -162,7 +167,7 @@ function Section({
 				>
 					{String(index).padStart(2, "0")}
 				</span>
-				<div className="flex flex-1 items-baseline gap-3 border-b border-foreground/10 pb-3">
+				<div className="flex flex-1 flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-foreground/10 pb-3">
 					<span
 						aria-hidden
 						className="inline-flex h-5 w-5 items-center justify-center text-primary/80"
@@ -174,6 +179,11 @@ function Section({
 					</h2>
 					{tag && (
 						<span className="ml-auto eyebrow text-foreground/55">{tag}</span>
+					)}
+					{subtitle && (
+						<p className="w-full max-w-[68ch] text-[0.8125rem] text-muted-foreground leading-relaxed">
+							{subtitle}
+						</p>
 					)}
 				</div>
 			</header>
@@ -252,14 +262,31 @@ function MoodAxisMeter({ axis }: { axis: MoodAxis }) {
 
 const OUR_DREAM_FIELD_LABELS: Record<keyof OurDreamFields, string> = {
 	ethnicity: "Ethnicity",
-	skinColor: "Skin color",
+	skinColor: "Skin tone",
 	bodyType: "Body type",
 	breastSize: "Breast size",
 	buttSize: "Butt size",
 	hairColor: "Hair color",
 	hairStyle: "Hair style",
 	eyeColor: "Eye color",
+	tags: "Tags",
 };
+
+// UI display order — distinct from the schema's OUR_DREAM_FIELD_KEYS which is
+// preserved for prompts. The display starts with the most identity-defining
+// anchors (hair style, body type, ethnicity) before drilling into size and
+// colour details. Tags are excluded — they render as badges in the Personality tab.
+type OurDreamPhysicalKey = Exclude<keyof OurDreamFields, "tags">;
+const OUR_DREAM_PHYSICAL_DISPLAY_ORDER: OurDreamPhysicalKey[] = [
+	"hairStyle",
+	"bodyType",
+	"ethnicity",
+	"breastSize",
+	"buttSize",
+	"eyeColor",
+	"hairColor",
+	"skinColor",
+];
 
 function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
 	return (
@@ -268,7 +295,7 @@ function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
 				Atomic values for the OurDream creation form
 			</div>
 			<dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-				{OUR_DREAM_FIELD_KEYS.map((key) => (
+				{OUR_DREAM_PHYSICAL_DISPLAY_ORDER.map((key) => (
 					<Field
 						key={key}
 						label={OUR_DREAM_FIELD_LABELS[key]}
@@ -277,6 +304,19 @@ function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
 					/>
 				))}
 			</dl>
+		</div>
+	);
+}
+
+function TagsRow({ tags }: { tags: readonly string[] }) {
+	if (tags.length === 0) return null;
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			{tags.map((t) => (
+				<Badge key={t} variant="secondary" className="font-medium text-[11px]">
+					{t}
+				</Badge>
+			))}
 		</div>
 	);
 }
@@ -345,8 +385,13 @@ export function CharacterIdentity({ data }: CharacterIdentityProps) {
 				<div className="eyebrow text-foreground/55">
 					Character profile · {formatLongDate(data.createdAt)}
 				</div>
-				<h1 className="-tracking-[0.025em] mt-3 font-semibold text-[2.25rem] text-foreground leading-[1.02] sm:text-[2.5rem]">
+				<h1 className="-tracking-[0.025em] mt-3 flex items-baseline gap-3 font-semibold text-[2.25rem] text-foreground leading-[1.02] sm:text-[2.5rem]">
 					{fullName}
+					{character.age && (
+						<span className="font-medium text-[1.25rem] text-foreground/55 tabular-nums sm:text-[1.4rem]">
+							· {character.age}
+						</span>
+					)}
 				</h1>
 				<p className="mt-3 max-w-[28ch] text-[0.875rem] text-muted-foreground leading-relaxed">
 					{character.publicDescription}
@@ -406,8 +451,7 @@ export function CharacterReview({
 	actions,
 	data,
 	onRefineScene,
-	onRestartFromMessage,
-	onRegenerateFromMessage,
+	onRewindFromMessage,
 }: CharacterReviewProps) {
 	const { character, scenes } = data;
 	const imageModel = getStoredImageModel(data);
@@ -451,9 +495,33 @@ export function CharacterReview({
 			<TabsContent value="appearance">
 				<div className="space-y-12">
 					<Section
-						icon={<PenLine className="h-4 w-4" />}
+						icon={<User className="h-4 w-4" />}
 						index={1}
-						title="Base generation prompt"
+						title="Identity"
+					>
+						<dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+							<div className="flex flex-col gap-1">
+								<dt className="eyebrow text-foreground/45">Name</dt>
+								<dd className="-tracking-[0.005em] font-semibold text-foreground text-[1.05rem]">
+									{getFullName(character)}
+								</dd>
+							</div>
+							{character.age && (
+								<div className="flex flex-col gap-1">
+									<dt className="eyebrow text-foreground/45">Age</dt>
+									<dd className="-tracking-[0.005em] font-semibold text-foreground text-[1.05rem] tabular-nums">
+										{character.age}
+									</dd>
+								</div>
+							)}
+						</dl>
+					</Section>
+
+					<Section
+						icon={<PenLine className="h-4 w-4" />}
+						index={2}
+						title="Generation prompt"
+						subtitle="The full prompt fed to the character generator — identity, lifestyle, measurements, and personality essence woven into one block."
 					>
 						<Field
 							label="Generation prompt"
@@ -463,9 +531,32 @@ export function CharacterReview({
 					</Section>
 
 					<Section
+						icon={<Image className="h-4 w-4" />}
+						index={3}
+						title="Base image prompt"
+						subtitle="The reusable visual prompt the image model anchors every scene on."
+					>
+						<Field
+							label="Image prompt"
+							mono
+							value={character.baseImagePrompt}
+						/>
+					</Section>
+
+					{character.ourDreamFields && (
+						<Section
+							icon={<Palette className="h-4 w-4" />}
+							index={4}
+							title="OurDream atomic fields"
+						>
+							<OurDreamFieldsGrid fields={character.ourDreamFields} />
+						</Section>
+					)}
+
+					<Section
 						icon={<User className="h-4 w-4" />}
-						index={2}
-						title="Body and physical details"
+						index={character.ourDreamFields ? 5 : 4}
+						title="Custom physical details"
 					>
 						<div className="space-y-7">
 							{character.confirmedMeasurements && (
@@ -482,42 +573,12 @@ export function CharacterReview({
 
 					<Section
 						icon={<Eye className="h-4 w-4" />}
-						index={3}
-						title="Face details"
+						index={character.ourDreamFields ? 6 : 5}
+						title="Custom face details"
 					>
 						<CollapsibleField
 							label="Face details"
 							value={character.customFaceDetails}
-						/>
-					</Section>
-
-					{character.ourDreamFields && (
-						<Section
-							icon={<Palette className="h-4 w-4" />}
-							index={4}
-							title="OurDream atomic fields"
-						>
-							<OurDreamFieldsGrid fields={character.ourDreamFields} />
-						</Section>
-					)}
-
-					<Section
-						icon={<Eye className="h-4 w-4" />}
-						index={character.ourDreamFields ? 5 : 4}
-						title="Public description"
-					>
-						<CollapsibleField label="" value={character.publicDescription} />
-					</Section>
-
-					<Section
-						icon={<Image className="h-4 w-4" />}
-						index={character.ourDreamFields ? 6 : 5}
-						title="Image generation prompt"
-					>
-						<Field
-							label="Image prompt"
-							mono
-							value={character.baseImagePrompt}
 						/>
 					</Section>
 				</div>
@@ -526,8 +587,16 @@ export function CharacterReview({
 			<TabsContent value="personality">
 				<div className="space-y-12">
 					<Section
-						icon={<Tag className="h-4 w-4" />}
+						icon={<Eye className="h-4 w-4" />}
 						index={1}
+						title="Public description"
+					>
+						<CollapsibleField label="" value={character.publicDescription} />
+					</Section>
+
+					<Section
+						icon={<Tag className="h-4 w-4" />}
+						index={2}
 						title="Labels"
 					>
 						<div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
@@ -542,23 +611,65 @@ export function CharacterReview({
 						</div>
 					</Section>
 
+					{character.ourDreamFields?.tags &&
+						character.ourDreamFields.tags.length > 0 && (
+							<Section
+								icon={<Tag className="h-4 w-4" />}
+								index={3}
+								tag={`${character.ourDreamFields.tags.length}`}
+								title="Tags"
+							>
+								<TagsRow tags={character.ourDreamFields.tags} />
+							</Section>
+						)}
+
 					{character.moodAxes && (
 						<Section
 							icon={<Gauge className="h-4 w-4" />}
-							index={2}
+							index={
+								character.ourDreamFields?.tags &&
+								character.ourDreamFields.tags.length > 0
+									? 4
+									: 3
+							}
 							tag="0 → 100"
 							title="Mood axes"
 						>
 							<div className="space-y-8">
 								<MoodAxisMeter axis={character.moodAxes.primary} />
 								<MoodAxisMeter axis={character.moodAxes.secondary} />
+								{character.moodAxes.hidden &&
+									character.moodAxes.hidden.length > 0 && (
+										<div className="space-y-8 border-foreground/10 border-t pt-6">
+											<div className="flex items-center gap-2">
+												<span className="eyebrow text-foreground/55">
+													Hidden axes
+												</span>
+												<Badge variant="outline" className="font-medium text-[10px]">
+													{character.moodAxes.hidden.length} silent
+												</Badge>
+											</div>
+											<p className="max-w-prose text-[0.8125rem] text-muted-foreground leading-relaxed">
+												These axes evolve in the background — they shape the character's
+												behavior but never appear in the chat header.
+											</p>
+											{character.moodAxes.hidden.map((axis, i) => (
+												<div
+													key={`${axis.label}-${String(i)}`}
+													className="opacity-70"
+												>
+													<MoodAxisMeter axis={axis} />
+												</div>
+											))}
+										</div>
+									)}
 							</div>
 						</Section>
 					)}
 
 					<Section
 						icon={<MessageSquare className="h-4 w-4" />}
-						index={character.moodAxes ? 3 : 2}
+						index={character.moodAxes ? 5 : 4}
 						title="Greeting"
 					>
 						<Field
@@ -570,7 +681,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<MessageSquare className="h-4 w-4" />}
-						index={character.moodAxes ? 4 : 3}
+						index={character.moodAxes ? 6 : 5}
 						title="First reply suggestion"
 					>
 						<CollapsibleField
@@ -581,7 +692,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<BookOpen className="h-4 w-4" />}
-						index={character.moodAxes ? 5 : 4}
+						index={character.moodAxes ? 7 : 6}
 						title="Scenario"
 					>
 						<CollapsibleField
@@ -593,7 +704,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<PenLine className="h-4 w-4" />}
-						index={character.moodAxes ? 6 : 5}
+						index={character.moodAxes ? 8 : 7}
 						title="Personality and background"
 					>
 						<div className="space-y-6">
@@ -610,7 +721,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<Shield className="h-4 w-4" />}
-						index={character.moodAxes ? 7 : 6}
+						index={character.moodAxes ? 9 : 8}
 						tag="0 → 10"
 						title="Difficulty profile"
 					>
@@ -640,7 +751,7 @@ export function CharacterReview({
 
 					<Section
 						icon={<Heart className="h-4 w-4" />}
-						index={character.moodAxes ? 8 : 7}
+						index={character.moodAxes ? 10 : 9}
 						tag="0 → 10"
 						title="Intimacy profile"
 					>
@@ -771,8 +882,7 @@ export function CharacterReview({
 						characterMessages={data.gatheringMessages}
 						sceneMessages={data.sceneGatheringMessages}
 						gatheringSummary={data.gatheringSummary}
-						onRegenerateFromMessage={onRegenerateFromMessage}
-						onRestartFromMessage={onRestartFromMessage}
+						onRewindFromMessage={onRewindFromMessage}
 					/>
 				</TabsContent>
 			)}
@@ -784,19 +894,17 @@ interface GatheringTabProps {
 	characterMessages?: UIMessage[];
 	sceneMessages?: UIMessage[];
 	gatheringSummary?: string;
-	onRestartFromMessage?: (params: {
+	onRewindFromMessage?: (params: {
 		phase: GatheringPhase;
 		messageId: string;
 	}) => void;
-	onRegenerateFromMessage?: (params: { messageId: string }) => void;
 }
 
 function GatheringTab({
 	characterMessages,
 	sceneMessages,
 	gatheringSummary,
-	onRestartFromMessage,
-	onRegenerateFromMessage,
+	onRewindFromMessage,
 }: GatheringTabProps) {
 	const hasCharacterMessages =
 		characterMessages && characterMessages.length > 0;
@@ -815,15 +923,10 @@ function GatheringTab({
 				>
 					<GatheringTranscript
 						messages={characterMessages}
-						onRegenerateFromMessage={
-							onRegenerateFromMessage
-								? (id) => onRegenerateFromMessage({ messageId: id })
-								: undefined
-						}
-						onRestartFromMessage={
-							onRestartFromMessage
+						onRewindFromMessage={
+							onRewindFromMessage
 								? (id) =>
-										onRestartFromMessage({ phase: "character", messageId: id })
+										onRewindFromMessage({ phase: "character", messageId: id })
 								: undefined
 						}
 					/>
@@ -839,10 +942,10 @@ function GatheringTab({
 				>
 					<GatheringTranscript
 						messages={sceneMessages}
-						onRestartFromMessage={
-							onRestartFromMessage
+						onRewindFromMessage={
+							onRewindFromMessage
 								? (id) =>
-										onRestartFromMessage({ phase: "scenes", messageId: id })
+										onRewindFromMessage({ phase: "scenes", messageId: id })
 								: undefined
 						}
 					/>
@@ -876,16 +979,14 @@ function noopAddToolOutput() {}
 
 function GatheringTranscript({
 	messages,
-	onRestartFromMessage,
-	onRegenerateFromMessage,
+	onRewindFromMessage,
 }: {
 	messages: UIMessage[];
-	onRestartFromMessage?: (messageId: string) => void;
-	onRegenerateFromMessage?: (messageId: string) => void;
+	onRewindFromMessage?: (messageId: string) => void;
 }) {
 	// For assistant messages we walk back to find the prior user turn — if none
-	// exists (e.g. the very first message is an assistant greeting), restart
-	// can't fork there, so we skip the Restart button on those messages.
+	// exists (e.g. the very first message is an assistant greeting), there's
+	// nothing to rewind to, so we skip the button on that message.
 	const hasPriorUserMessage = (idx: number): boolean => {
 		for (let i = idx - 1; i >= 0; i--) {
 			if (messages[i].role === "user") return true;
@@ -896,49 +997,30 @@ function GatheringTranscript({
 	return (
 		<div className="flex flex-col gap-4">
 			{messages.map((msg, idx) => {
-				const canRestart =
-					!!onRestartFromMessage &&
+				const canRewind =
+					!!onRewindFromMessage &&
 					(msg.role === "user" || hasPriorUserMessage(idx));
-				// Regenerate works at any message because it skips the chat entirely
-				// — it just snapshots the transcript up to and including this message
-				// and goes straight to profile review.
-				const canRegenerate = !!onRegenerateFromMessage;
-				const showRow = canRestart || canRegenerate;
 				const alignRight = msg.role === "user";
 				return (
 					<div className="group/turn relative" key={msg.id}>
 						<ChatMessage addToolOutput={noopAddToolOutput} message={msg} />
-						{showRow && (
+						{canRewind && (
 							<div
 								className={cn(
 									"mt-1 flex flex-wrap items-center gap-1",
 									alignRight ? "justify-end pr-10" : "justify-start pl-10",
 								)}
 							>
-								{canRegenerate && (
-									<Button
-										className="text-muted-foreground hover:text-primary"
-										onClick={() => onRegenerateFromMessage?.(msg.id)}
-										size="sm"
-										title="Skip the chat and go straight to profile review using the gathering up to this point"
-										variant="ghost"
-									>
-										<Wand2 className="h-3 w-3" />
-										Regenerate from here
-									</Button>
-								)}
-								{canRestart && (
-									<Button
-										className="text-muted-foreground hover:text-primary"
-										onClick={() => onRestartFromMessage?.(msg.id)}
-										size="sm"
-										title="Restart the gathering chat from this point"
-										variant="ghost"
-									>
-										<RotateCcw className="h-3 w-3" />
-										Restart chat from here
-									</Button>
-								)}
+								<Button
+									className="text-muted-foreground hover:text-primary"
+									onClick={() => onRewindFromMessage?.(msg.id)}
+									size="sm"
+									title="Rewind the conversation to this point; the chat resumes naturally from here"
+									variant="ghost"
+								>
+									<RotateCcw className="h-3 w-3" />
+									Rewind to here
+								</Button>
 							</div>
 						)}
 					</div>

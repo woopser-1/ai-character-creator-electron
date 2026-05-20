@@ -13,6 +13,7 @@ import {
   type PortableCharacter,
 } from "@shared/character-port";
 import type { UIMessage } from "@shared/chat";
+import type { Draft } from "@shared/drafts";
 import type {
   AppSettings,
   Character,
@@ -61,6 +62,13 @@ import {
   updateCharacter,
   updateCharacterScenes,
 } from "../storage/characters";
+import {
+  deleteDraft,
+  getDraft,
+  getLatestDraft,
+  listDrafts,
+  saveDraft,
+} from "../storage/drafts";
 import { extractOurDreamProfileImage } from "../storage/ourdream";
 import { getSettings, updateSettings } from "../storage/settings";
 import { checkForUpdate, type UpdateInfo } from "../updates/check";
@@ -481,6 +489,41 @@ export function registerIpc(window: BrowserWindow): void {
     }
   );
 
+  ipcMain.handle(
+    "drafts:save",
+    async (_event, draft: Draft): Promise<Draft> => {
+      return saveDraft(draft);
+    }
+  );
+
+  ipcMain.handle(
+    "drafts:get",
+    async (_event, id: string): Promise<Draft | null> => {
+      return getDraft(id);
+    }
+  );
+
+  ipcMain.handle(
+    "drafts:getLatest",
+    async (): Promise<Draft | null> => {
+      return getLatestDraft();
+    }
+  );
+
+  ipcMain.handle(
+    "drafts:list",
+    async (): Promise<Draft[]> => {
+      return listDrafts();
+    }
+  );
+
+  ipcMain.handle(
+    "drafts:delete",
+    async (_event, id: string): Promise<void> => {
+      await deleteDraft(id);
+    }
+  );
+
   ipcMain.handle("settings:get", async (): Promise<AppSettings> => {
     return getSettings();
   });
@@ -504,6 +547,8 @@ export function registerIpc(window: BrowserWindow): void {
         imageModel?: ImageModel;
         confirmedMeasurements?: Measurements;
         confirmedProfile?: ConfirmedProfile;
+        draftId?: string;
+        sourceCharacterId?: string;
       }
     ): Promise<GenerateCharacterAllResponse> => {
       const settings = await getSettings();
@@ -540,7 +585,7 @@ export function registerIpc(window: BrowserWindow): void {
         ? { ...result.character, confirmedMeasurements: payload.confirmedMeasurements }
         : result.character;
       const stored: StoredCharacter = {
-        id: nanoid(),
+        id: payload.draftId ?? nanoid(),
         createdAt: new Date().toISOString(),
         character: characterWithMeasurements,
         scenes: [],
@@ -549,6 +594,7 @@ export function registerIpc(window: BrowserWindow): void {
         imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
         gatheringSummary: payload.gatheringSummary,
         confirmedProfile: payload.confirmedProfile,
+        sourceCharacterId: payload.sourceCharacterId,
       };
       await saveCharacter(stored);
 
@@ -641,6 +687,8 @@ export function registerIpc(window: BrowserWindow): void {
         confirmedMeasurements?: Measurements;
         gatheringSummary?: string;
         confirmedProfile?: ConfirmedProfile;
+        draftId?: string;
+        sourceCharacterId?: string;
       }
     ) => {
       const { characterSchema } = await import("@shared/schemas");
@@ -661,7 +709,7 @@ export function registerIpc(window: BrowserWindow): void {
         };
       }
       const stored: StoredCharacter = {
-        id: nanoid(),
+        id: payload.draftId ?? nanoid(),
         createdAt: new Date().toISOString(),
         character: merged.data,
         scenes: [],
@@ -670,6 +718,7 @@ export function registerIpc(window: BrowserWindow): void {
         imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
         gatheringSummary: payload.gatheringSummary,
         confirmedProfile: payload.confirmedProfile,
+        sourceCharacterId: payload.sourceCharacterId,
       };
       await saveCharacter(stored);
       return { success: true as const, stored };

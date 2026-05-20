@@ -246,7 +246,7 @@ export const moodAxisSchema = z.object({
 		.min(0)
 		.max(100)
 		.describe(
-			"Integer 0-100 at which this axis begins on first interaction. Must reflect the chosen difficulty (Extreme 0-15, Hard 10-25, Medium 25-50, Easy 40-60).",
+			"Integer 0-100 at which this axis begins on first interaction. Must reflect the chosen difficulty (Extreme 0-15, Hard 10-25, Medium 25-50, Easy 40-60) AND the nature of the axis (a 'Loyalty' axis may start high; a 'Trust' axis may start low).",
 		),
 	reasoning: z
 		.string()
@@ -258,12 +258,33 @@ export const moodAxisSchema = z.object({
 
 export type MoodAxis = z.infer<typeof moodAxisSchema>;
 
+// MoodAxes uses a fixed visible primary + secondary (which appear in the
+// metadata header) plus an OPTIONAL `hidden` array of 1-3 additional axes that
+// evolve silently in the background and condition behavior without surfacing in
+// the visible header. Hidden axes still mutate per reply.
 export const moodAxesSchema = z.object({
-	primary: moodAxisSchema,
-	secondary: moodAxisSchema,
+	primary: moodAxisSchema.describe(
+		"The first visible axis — appears in the metadata header. Should be the axis MOST influenced by the user's behavior in the context of this specific character.",
+	),
+	secondary: moodAxisSchema.describe(
+		"The second visible axis — appears in the metadata header. Should be the axis that creates the most dramatic tension with the primary axis.",
+	),
+	hidden: z
+		.array(moodAxisSchema)
+		.min(1)
+		.max(3)
+		.optional()
+		.describe(
+			"1-3 ADDITIONAL hidden axes that evolve silently in the background. They DO NOT appear in the metadata header but still mutate per reply and shape narrative behavior (e.g. 'Loyalty to clique', 'Inner doubt', 'Public persona'). Pick hidden axes that capture nuances specific to this character — internal tensions, social obligations, private fears, secret cravings. Hidden axes MUST NOT duplicate or trivially mirror the visible primary/secondary.",
+		),
 });
 
 export type MoodAxes = z.infer<typeof moodAxesSchema>;
+
+// Helper — flat list of all axes (visible + hidden).
+export function getAllMoodAxes(m: MoodAxes): MoodAxis[] {
+	return [m.primary, m.secondary, ...(m.hidden ?? [])];
+}
 
 export const measurementsSchema = z.object({
 	heightCm: z
@@ -355,6 +376,13 @@ export const ourDreamFieldsSchema = z.object({
 		.describe(
 			"Eye color + qualifier as prose, e.g. 'large sparkling vivid bright blue eyes'. Must match the eye colour in customFaceDetails.",
 		),
+	tags: z
+		.array(z.string().min(1))
+		.min(8)
+		.max(15)
+		.describe(
+			"8-15 categorical tags in Title Case (1-3 words each) used for character discovery on OurDream. Mix categories — aim for: 1-2 physical descriptors (e.g. 'Blonde', 'Tan', 'Athletic'), 1-2 personality traits (e.g. 'Bubbly', 'Brat', 'Shy'), 1-3 context/scenario tags (e.g. 'College', 'Sorority', 'Step Daughter'), 1-2 narrative arc tags (e.g. 'Slow Burn', 'Romance', 'Forbidden'), and 1 quality/style tag (e.g. 'Realistic', 'Earned'). Tags must be coherent with the character's actual physical traits, personality, and scenario — never generic filler.",
+		),
 });
 
 export type OurDreamFields = z.infer<typeof ourDreamFieldsSchema>;
@@ -433,6 +461,7 @@ export type ConfirmedMoodAxis = z.infer<typeof confirmedMoodAxisSchema>;
 export const confirmedMoodAxesSchema = z.object({
 	primary: confirmedMoodAxisSchema,
 	secondary: confirmedMoodAxisSchema,
+	hidden: z.array(confirmedMoodAxisSchema).min(1).max(3).optional(),
 });
 
 export type ConfirmedMoodAxes = z.infer<typeof confirmedMoodAxesSchema>;
@@ -455,6 +484,15 @@ export const characterSchema = z.object({
 		.min(1)
 		.describe(
 			"The character's last (family) name. REQUIRED — never empty. A character without a last name is invalid.",
+		),
+	age: z
+		.number()
+		.int()
+		.min(18)
+		.max(99)
+		.optional()
+		.describe(
+			"The character's age in years (integer 18-99). Optional for backwards compatibility with characters created before this field existed — but required for all new generations (enforced in characterVisualSchema). Must match the age woven into baseGenerationPrompt and any image prompts.",
 		),
 	baseGenerationPrompt: z
 		.string()
@@ -541,8 +579,16 @@ export const characterVisualSchema = characterSchema
 		baseImagePrompt: true,
 	})
 	.extend({
+		age: z
+			.number()
+			.int()
+			.min(18)
+			.max(99)
+			.describe(
+				"The character's age (integer 18-99) — REQUIRED on visual generation. Must match the age woven into baseGenerationPrompt and baseImagePrompt.",
+			),
 		ourDreamFields: ourDreamFieldsSchema.describe(
-			"Required on visual generation: the 8 atomic OurDream fields, prose-rich and coherent with the other visual prose blocks.",
+			"Required on visual generation: the 9 atomic OurDream fields (8 physical + tags array), prose-rich and coherent with the other visual prose blocks.",
 		),
 	});
 
@@ -606,7 +652,7 @@ export const sceneSchema = z.object({
 		.string()
 		.optional()
 		.describe(
-			"ONLY for Dreamy model: comma-separated tags describing what the image MUST avoid. Leave omitted for Vivid / Vivid 2.",
+			"Comma-separated tag list of things the image MUST avoid. Supported by all image models (Vivid 1, Vivid 2, Vivid 3, Dreamy). Optional only for backwards compatibility with scenes created before negative prompts were supported on Vivid; new scenes should always include it.",
 		),
 });
 
@@ -648,6 +694,8 @@ export interface StoredCharacter {
 	confirmedProfile?: ConfirmedProfile;
 	gatheringMessages?: UIMessage[];
 	sceneGatheringMessages?: UIMessage[];
+	/** When this character was forked from another via Rewind from a completed character. */
+	sourceCharacterId?: string;
 }
 
 export function getStoredMessageLength(
@@ -694,6 +742,12 @@ export const GENERATION_MODEL_META: Record<
 export const appSettingsSchema = z.object({
 	superAdmin: z.boolean().default(false),
 	generationModel: z.enum(GENERATION_MODELS).default(DEFAULT_GENERATION_MODEL),
+	/** Last difficulty the user picked in a /create session; reused as the default next time. */
+	lastDifficulty: z.enum(DIFFICULTIES).optional(),
+	/** Last reply-length preference the user picked; reused as the default next time. */
+	lastMessageLength: z.enum(MESSAGE_LENGTHS).optional(),
+	/** Last image model the user picked; reused as the default next time. */
+	lastImageModel: z.enum(IMAGE_MODELS).optional(),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 

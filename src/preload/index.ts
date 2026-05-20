@@ -9,6 +9,7 @@ import type {
   StartChatResult,
   UIMessage,
 } from "@shared/chat";
+import type { Draft } from "@shared/drafts";
 import type {
   GenerateCharacterAllResponse,
   GenerateCharacterStepResponse,
@@ -178,6 +179,17 @@ const api = {
     importFromPaths: (paths: string[]): Promise<ImportResponse> =>
       ipcRenderer.invoke("characters:importFromPaths", { paths }),
   },
+  drafts: {
+    save: (draft: Draft): Promise<Draft> =>
+      ipcRenderer.invoke("drafts:save", draft),
+    get: (id: string): Promise<Draft | null> =>
+      ipcRenderer.invoke("drafts:get", id),
+    getLatest: (): Promise<Draft | null> =>
+      ipcRenderer.invoke("drafts:getLatest"),
+    list: (): Promise<Draft[]> => ipcRenderer.invoke("drafts:list"),
+    delete: (id: string): Promise<void> =>
+      ipcRenderer.invoke("drafts:delete", id),
+  },
   shell: {
     showInFolder: (path: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke("shell:showInFolder", path),
@@ -196,6 +208,8 @@ const api = {
       imageModel?: ImageModel;
       confirmedMeasurements?: Measurements;
       confirmedProfile?: ConfirmedProfile;
+      draftId?: string;
+      sourceCharacterId?: string;
     }): Promise<GenerateCharacterAllResponse> =>
       ipcRenderer.invoke("generate:character:all", payload),
     characterStep: (payload: {
@@ -217,6 +231,8 @@ const api = {
       confirmedMeasurements?: Measurements;
       gatheringSummary?: string;
       confirmedProfile?: ConfirmedProfile;
+      draftId?: string;
+      sourceCharacterId?: string;
     }): Promise<
       | { success: true; stored: StoredCharacter }
       | { success: false; error: string }

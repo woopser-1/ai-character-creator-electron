@@ -39,7 +39,17 @@ export interface UseAgentChatReturn {
 	stop: () => Promise<void>;
 	deleteMessage: (id: string) => Promise<void>;
 	editAndResend: (id: string, newText: string) => Promise<void>;
-	regenerateFrom: (id: string) => Promise<void>;
+	/**
+	 * Rewind the chat to a specific message and let the IA take it from there.
+	 * - On a user message: truncate everything AFTER it and resend that user
+	 *   message — the IA produces a fresh reply at that point.
+	 * - On an assistant message: walk back to the prior user message, truncate
+	 *   that message's reply (and everything after) and resend that user message
+	 *   — the IA reformulates the same turn.
+	 * In both cases the chat naturally continues with the same flow as if the
+	 * conversation had been pre-filled up to this point.
+	 */
+	rewindTo: (id: string) => Promise<void>;
 }
 
 function isToolPart(part: MessagePart): part is ToolPart {
@@ -265,14 +275,33 @@ export function useAgentChat(
 				setError(result.error);
 				return;
 			}
-			setStatus("streaming");
+			// Leave the status at "submitted" — the IPC reply only confirms the
+			// session opened, the model hasn't produced anything yet. The "Thinking"
+			// indicator stays visible until the first text-delta or tool-call event
+			// flips us into "streaming" via handleEvent. Mirrors the start() flow.
 		},
 		[],
 	);
 
-	const deleteMessage = useCallback(async (id: string) => {
-		setMessages((prev) => prev.filter((m) => m.id !== id));
-	}, []);
+	const deleteMessage = useCallback(
+		async (id: string) => {
+			setMessages((prev) => prev.filter((m) => m.id !== id));
+			// If the model is mid-turn (preparing or streaming) when the user
+			// deletes a message, the intent is "stop this turn". Kill the session
+			// so the Thinking indicator clears and no further events land in the
+			// now-stripped transcript.
+			if (status === "submitted" || status === "streaming") {
+				const sid = sessionIdRef.current;
+				if (sid) {
+					await window.api.chat.stop(sid);
+					sessionIdRef.current = null;
+					setSessionId(null);
+					setStatus("idle");
+				}
+			}
+		},
+		[status],
+	);
 
 	const editAndResend = useCallback(
 		async (id: string, newText: string) => {
@@ -284,12 +313,17 @@ export function useAgentChat(
 		[messages, restart],
 	);
 
-	const regenerateFrom = useCallback(
+	const rewindTo = useCallback(
 		async (id: string) => {
 			const idx = messages.findIndex((m) => m.id === id);
 			if (idx < 0) return;
+			// On a user message: truncate after it and resend it as-is.
+			// On an assistant message: walk back to the prior user turn so the IA
+			// can reformulate the same answer.
 			let userIdx = idx;
-			while (userIdx >= 0 && messages[userIdx].role !== "user") userIdx--;
+			if (messages[idx].role !== "user") {
+				while (userIdx >= 0 && messages[userIdx].role !== "user") userIdx--;
+			}
 			if (userIdx < 0) return;
 			const userText = messages[userIdx].parts
 				.filter((p) => p.type === "text")
@@ -398,6 +432,6 @@ export function useAgentChat(
 		stop,
 		deleteMessage,
 		editAndResend,
-		regenerateFrom,
+		rewindTo,
 	};
 }

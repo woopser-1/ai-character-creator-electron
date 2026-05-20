@@ -1,6 +1,8 @@
 import { serializeTranscriptForReplay } from "@shared/chat-replay";
+import type { Draft } from "@shared/drafts";
 import type { GenerateProgressEvent, GenerateStepId } from "@shared/generate";
 import { Plus, RotateCcw, Wand2 } from "lucide-react";
+import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { ChatMessage } from "@/components/chat/chat-message";
@@ -111,12 +113,59 @@ export function CreatePage() {
 		ConfirmedProfile | undefined
 	>();
 	const stepDataRef = useRef<Partial<Record<CharacterStepId, unknown>>>({});
+	// Draft tracking. Allocated upfront so autosave can start the moment the
+	// user types their first message; reused as the final character id when the
+	// gathering successfully promotes to a StoredCharacter.
+	const draftIdRef = useRef<string>(nanoid());
+	const sourceCharacterIdRef = useRef<string | undefined>(undefined);
+	const [pendingDraft, setPendingDraft] = useState<Draft | null>(null);
+	const [resumeChecked, setResumeChecked] = useState(false);
 
 	const characterChat = useAgentChat();
 	const sceneChat = useAgentChat();
-	const { settings } = useSettings();
+	const { settings, update: updateSettings } = useSettings();
 	const superAdmin = settings?.superAdmin ?? false;
 	const [autopilot, setAutopilot] = useState(false);
+	// Once the user has touched a chat-setting pill, stop overriding it from the
+	// last-used defaults loaded from settings.json. Also gates the persistence
+	// effects so they only fire after the user has actually picked something.
+	const settingsAppliedRef = useRef(false);
+
+	// Apply the last-used chat settings as defaults — but only on a fresh
+	// /create with no seed (rewinds bring their own settings). Runs as soon as
+	// the settings hook resolves.
+	useEffect(() => {
+		if (!settings) return;
+		if (settingsAppliedRef.current) return;
+		if (seedAppliedRef.current) return;
+		settingsAppliedRef.current = true;
+		if (settings.lastDifficulty) setDifficulty(settings.lastDifficulty);
+		if (settings.lastMessageLength)
+			setMessageLength(settings.lastMessageLength);
+		if (settings.lastImageModel) setImageModel(settings.lastImageModel);
+	}, [settings]);
+
+	const handleDifficultyChange = useCallback(
+		(next: Difficulty) => {
+			setDifficulty(next);
+			void updateSettings({ lastDifficulty: next });
+		},
+		[updateSettings],
+	);
+	const handleMessageLengthChange = useCallback(
+		(next: MessageLength) => {
+			setMessageLength(next);
+			void updateSettings({ lastMessageLength: next });
+		},
+		[updateSettings],
+	);
+	const handleImageModelChange = useCallback(
+		(next: ImageModel) => {
+			setImageModel(next);
+			void updateSettings({ lastImageModel: next });
+		},
+		[updateSettings],
+	);
 
 	useChatAutopilot({
 		enabled: autopilot,
@@ -140,16 +189,26 @@ export function CreatePage() {
 		activeChat.status === "streaming" || activeChat.status === "submitted";
 
 	const seedAppliedRef = useRef(false);
-	const [pendingProfileInference, setPendingProfileInference] = useState(false);
 	useEffect(() => {
 		if (seedAppliedRef.current) return;
 		const seed = consumeReplaySeed();
-		if (!seed) return;
+		if (!seed) {
+			// No seed: check for a pending draft to potentially resume. Don't
+			// auto-restore silently — surface a banner and let the user decide.
+			void window.api.drafts.getLatest().then((draft) => {
+				if (draft) setPendingDraft(draft);
+				setResumeChecked(true);
+			});
+			return;
+		}
 		seedAppliedRef.current = true;
-		setDifficulty(seed.difficulty);
-		if (seed.messageLength) setMessageLength(seed.messageLength);
-		if (seed.imageModel) setImageModel(seed.imageModel);
-		if (seed.kind === "gather-character") {
+		setResumeChecked(true); // a seed wins over any pending draft
+		if (seed.kind === "rewind-character") {
+			draftIdRef.current = seed.draftId;
+			sourceCharacterIdRef.current = seed.sourceCharacterId;
+			setDifficulty(seed.difficulty);
+			if (seed.messageLength) setMessageLength(seed.messageLength);
+			if (seed.imageModel) setImageModel(seed.imageModel);
 			setPhase("character-gathering");
 			void characterChat.seedReplay({
 				payload: {
@@ -159,14 +218,10 @@ export function CreatePage() {
 				truncatedMessages: seed.truncatedMessages,
 				newMessage: seed.newMessage,
 			});
-		} else if (seed.kind === "regenerate-from-gathering") {
-			// Skip the chat entirely. Replay the previously-recorded gathering
-			// messages into the transcript so the user can see what's about to
-			// feed generation, then trigger profile inference immediately.
-			characterChat.setMessages(seed.gatheringMessages);
-			setPhase("character-profile-review");
-			setPendingProfileInference(true);
-		} else {
+		} else if (seed.kind === "rewind-scenes") {
+			setDifficulty(seed.difficulty);
+			if (seed.messageLength) setMessageLength(seed.messageLength);
+			if (seed.imageModel) setImageModel(seed.imageModel);
 			setCharacter(seed.character);
 			setSavedId(seed.originCharacterId);
 			setPhase("scene-gathering");
@@ -181,6 +236,56 @@ export function CreatePage() {
 			});
 		}
 	}, [characterChat, sceneChat]);
+
+	// Autosave the character-gathering draft. Runs whenever the transcript
+	// settles into a stable state — never during streaming, never with a tool
+	// call still awaiting input. A short debounce smooths bursts.
+	useEffect(() => {
+		if (phase !== "character-gathering") return;
+		if (characterChat.messages.length === 0) return;
+		if (
+			characterChat.status === "streaming" ||
+			characterChat.status === "submitted"
+		)
+			return;
+		const handle = window.setTimeout(() => {
+			void window.api.drafts.save({
+				id: draftIdRef.current,
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				kind: "character",
+				difficulty,
+				messageLength,
+				imageModel,
+				characterGatheringMessages: characterChat.messages,
+				sourceCharacterId: sourceCharacterIdRef.current,
+			});
+		}, 300);
+		return () => window.clearTimeout(handle);
+	}, [
+		phase,
+		characterChat.messages,
+		characterChat.status,
+		difficulty,
+		messageLength,
+		imageModel,
+	]);
+
+	// Real-time persistence for the scene-gathering phase. The character is
+	// already saved, so we write straight into StoredCharacter.sceneGatheringMessages.
+	useEffect(() => {
+		if (phase !== "scene-gathering") return;
+		if (!savedId) return;
+		if (sceneChat.messages.length === 0) return;
+		if (sceneChat.status === "streaming" || sceneChat.status === "submitted")
+			return;
+		const handle = window.setTimeout(() => {
+			void window.api.characters.updateGatheringMessages(savedId, {
+				sceneGatheringMessages: sceneChat.messages,
+			});
+		}, 300);
+		return () => window.clearTimeout(handle);
+	}, [phase, savedId, sceneChat.messages, sceneChat.status]);
 
 	useEffect(() => {
 		const off = window.api.generate.onProgress((ev: GenerateProgressEvent) => {
@@ -254,6 +359,12 @@ export function CreatePage() {
 		[characterChat],
 	);
 
+	const handleSuggestStarterCharacters = useCallback(() => {
+		void handleSendCharacter(
+			"Surprise me — propose 6-8 wildly different starter character concepts I could build from. Mix personalities, eras, occupations, settings, and vibes; lean into specificity (a haunted lighthouse keeper, a Bangkok fixer, a moody ceramicist, an heiress on the run). Use the selectMultiple tool so I can pick one or several to combine — I'll choose and we'll keep gathering from there.",
+		);
+	}, [handleSendCharacter]);
+
 	const handleSendScenes = useCallback(
 		async (text: string) => {
 			if (!character) return;
@@ -307,17 +418,6 @@ export function CreatePage() {
 		}
 	}, [gatheringSummary, difficulty]);
 
-	// Fire profile inference automatically once a regenerate-from-gathering seed
-	// has dropped its messages into the transcript. The seed effect can't call
-	// inferProfile directly because it depends on `gatheringSummary` — a useMemo
-	// that only sees the seeded messages after the next render tick.
-	useEffect(() => {
-		if (!pendingProfileInference) return;
-		if (!gatheringSummary || gatheringSummary.trim().length === 0) return;
-		setPendingProfileInference(false);
-		void handleGenerateCharacter();
-	}, [pendingProfileInference, gatheringSummary, handleGenerateCharacter]);
-
 	const handleConfirmProfile = useCallback(
 		async ({
 			measurements,
@@ -342,14 +442,19 @@ export function CreatePage() {
 				imageModel,
 				confirmedMeasurements: measurements,
 				confirmedProfile: profile,
+				draftId: draftIdRef.current,
+				sourceCharacterId: sourceCharacterIdRef.current,
 			});
 
 			if (result.success) {
 				setCharacter(result.stored.character);
 				setSavedId(result.stored.id);
-				void window.api.characters.updateGatheringMessages(result.stored.id, {
+				// Persist the gathering transcript onto the now-created character,
+				// then delete the draft (the promotion is complete).
+				await window.api.characters.updateGatheringMessages(result.stored.id, {
 					gatheringMessages: characterChat.messages,
 				});
+				await window.api.drafts.delete(draftIdRef.current);
 				setPhase("scene-gathering");
 				await sceneChat.start({
 					flow: "gather-scenes",
@@ -414,14 +519,17 @@ export function CreatePage() {
 						confirmedMeasurements,
 						gatheringSummary,
 						confirmedProfile,
+						draftId: draftIdRef.current,
+						sourceCharacterId: sourceCharacterIdRef.current,
 					});
 					if (final.success) {
 						setCharacter(final.stored.character);
 						setSavedId(final.stored.id);
-						void window.api.characters.updateGatheringMessages(
+						await window.api.characters.updateGatheringMessages(
 							final.stored.id,
 							{ gatheringMessages: characterChat.messages },
 						);
+						await window.api.drafts.delete(draftIdRef.current);
 						setPhase("scene-gathering");
 						await sceneChat.start({
 							flow: "gather-scenes",
@@ -506,9 +614,59 @@ export function CreatePage() {
 	const hasProgress =
 		characterChat.messages.length > 0 || sceneChat.messages.length > 0;
 
+	const handleResumeDraft = useCallback(() => {
+		if (!pendingDraft) return;
+		draftIdRef.current = pendingDraft.id;
+		sourceCharacterIdRef.current = pendingDraft.sourceCharacterId;
+		setDifficulty(pendingDraft.difficulty);
+		if (pendingDraft.messageLength)
+			setMessageLength(pendingDraft.messageLength);
+		if (pendingDraft.imageModel) setImageModel(pendingDraft.imageModel);
+		const messages = pendingDraft.characterGatheringMessages ?? [];
+		// Walk back to the last user message and replay everything before it as
+		// the transcript; the IA picks up where it left off and reformulates the
+		// final turn. Same mental model as Rewind — a natural resume.
+		let userIdx = messages.length - 1;
+		while (userIdx >= 0 && messages[userIdx].role !== "user") userIdx--;
+		if (userIdx < 0) {
+			// Draft has no user turn yet; nothing to replay. Just clear.
+			setPendingDraft(null);
+			return;
+		}
+		const userText = messages[userIdx].parts
+			.filter((p) => p.type === "text")
+			.map((p) => (p as { text: string }).text)
+			.join("\n")
+			.trim();
+		if (!userText) {
+			setPendingDraft(null);
+			return;
+		}
+		const before = messages.slice(0, userIdx);
+		setPhase("character-gathering");
+		setPendingDraft(null);
+		void characterChat.seedReplay({
+			payload: {
+				flow: "gather-character",
+				initialUserMessage: userText,
+			},
+			truncatedMessages: before,
+			newMessage: userText,
+		});
+	}, [pendingDraft, characterChat]);
+
+	const handleDiscardDraft = useCallback(() => {
+		if (!pendingDraft) return;
+		void window.api.drafts.delete(pendingDraft.id);
+		setPendingDraft(null);
+	}, [pendingDraft]);
+
 	const handleStartOver = useCallback(() => {
 		void characterChat.stop();
 		void sceneChat.stop();
+		void window.api.drafts.delete(draftIdRef.current);
+		draftIdRef.current = nanoid();
+		sourceCharacterIdRef.current = undefined;
 		characterChat.setMessages([]);
 		sceneChat.setMessages([]);
 		setPhase("character-gathering");
@@ -527,6 +685,7 @@ export function CreatePage() {
 		setProfileError(undefined);
 		setConfirmedMeasurements(undefined);
 		setConfirmedProfile(undefined);
+		setPendingDraft(null);
 	}, [characterChat, sceneChat]);
 
 	const characterDone =
@@ -597,17 +756,17 @@ export function CreatePage() {
 					config={
 						<>
 							<DifficultyPill
-								onChange={setDifficulty}
+								onChange={handleDifficultyChange}
 								readOnly={difficultyReadOnly}
 								value={difficulty}
 							/>
 							<MessageLengthPill
-								onChange={setMessageLength}
+								onChange={handleMessageLengthChange}
 								readOnly={difficultyReadOnly}
 								value={messageLength}
 							/>
 							<ImageModelPill
-								onChange={setImageModel}
+								onChange={handleImageModelChange}
 								readOnly={imageModelReadOnly}
 								value={imageModel}
 							/>
@@ -804,13 +963,60 @@ export function CreatePage() {
 										temperament, the room they're standing in. The agent will
 										refine the rest by asking follow-up questions.
 									</p>
+									<div className="flex flex-wrap items-center gap-2">
+										<Button
+											className="glow-md hover:glow-lg"
+											disabled={isStreaming}
+											onClick={handleSuggestStarterCharacters}
+											size="sm"
+										>
+											<Wand2 className="h-3.5 w-3.5" />
+											Surprise me
+										</Button>
+										<span className="text-foreground/45 text-xs">
+											or type your own brief below.
+										</span>
+									</div>
+									{resumeChecked && pendingDraft && (
+										<div className="animate-message-in flex flex-wrap items-center gap-3 rounded-2xl bg-secondary/50 px-4 py-3 ring-1 ring-foreground/10">
+											<div className="flex min-w-0 flex-1 flex-col">
+												<span className="eyebrow text-foreground/55">
+													Unfinished brief
+												</span>
+												<span className="text-foreground/80 text-sm">
+													{(pendingDraft.characterGatheringMessages?.length ?? 0)}{" "}
+													messages saved · last edit{" "}
+													{new Date(pendingDraft.updatedAt).toLocaleString()}
+												</span>
+											</div>
+											<div className="flex items-center gap-2">
+												<Button
+													onClick={handleDiscardDraft}
+													size="sm"
+													variant="ghost"
+												>
+													Discard
+												</Button>
+												<Button onClick={handleResumeDraft} size="sm">
+													<RotateCcw className="h-3.5 w-3.5" />
+													Resume
+												</Button>
+											</div>
+										</div>
+									)}
 								</div>
 							)}
-							{characterChat.messages.map((msg) => (
+							{characterChat.messages.map((msg, idx) => (
 								<ChatMessage
 									addToolOutput={characterChat.addToolOutput}
 									key={msg.id}
 									message={msg}
+									noPriorUserTurn={
+										msg.role === "assistant" &&
+										!characterChat.messages
+											.slice(0, idx)
+											.some((m) => m.role === "user")
+									}
 									onDelete={
 										phase === "character-gathering"
 											? characterChat.deleteMessage
@@ -821,9 +1027,9 @@ export function CreatePage() {
 											? characterChat.editAndResend
 											: undefined
 									}
-									onRegenerateFrom={
+									onRewind={
 										phase === "character-gathering"
-											? characterChat.regenerateFrom
+											? characterChat.rewindTo
 											: undefined
 									}
 								/>
@@ -869,11 +1075,17 @@ export function CreatePage() {
 									</div>
 								)}
 							</div>
-							{sceneChat.messages.map((msg) => (
+							{sceneChat.messages.map((msg, idx) => (
 								<ChatMessage
 									addToolOutput={sceneChat.addToolOutput}
 									key={msg.id}
 									message={msg}
+									noPriorUserTurn={
+										msg.role === "assistant" &&
+										!sceneChat.messages
+											.slice(0, idx)
+											.some((m) => m.role === "user")
+									}
 									onDelete={
 										phase === "scene-gathering"
 											? sceneChat.deleteMessage
@@ -884,9 +1096,9 @@ export function CreatePage() {
 											? sceneChat.editAndResend
 											: undefined
 									}
-									onRegenerateFrom={
+									onRewind={
 										phase === "scene-gathering"
-											? sceneChat.regenerateFrom
+											? sceneChat.rewindTo
 											: undefined
 									}
 								/>

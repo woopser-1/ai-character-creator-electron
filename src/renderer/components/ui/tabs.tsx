@@ -57,8 +57,11 @@ export function TabsTrigger({
 	return (
 		<BaseTabs.Tab
 			className={cn(
-				"inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-muted-foreground text-xs outline-none transition-colors duration-200 ease-out hover:text-foreground focus-visible:ring-3 focus-visible:ring-primary/40",
-				"data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:font-semibold data-[selected]:glow-sm",
+				"inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-muted-foreground text-xs outline-none transition-all duration-200 ease-out hover:text-foreground focus-visible:ring-3 focus-visible:ring-primary/40",
+				// base-ui exposes the selected state as `data-active` on TabsTab,
+				// not `data-selected` — the old selector never matched, so the
+				// active styles were invisible.
+				"data-[active]:bg-primary data-[active]:text-primary-foreground data-[active]:font-semibold data-[active]:glow-sm",
 				className,
 			)}
 			value={value}

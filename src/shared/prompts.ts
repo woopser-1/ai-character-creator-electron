@@ -41,6 +41,19 @@ export function applySuperAdminOverride(
 	return `${SUPER_ADMIN_OVERRIDE_BLOCK}\n${systemPrompt}`;
 }
 
+/**
+ * Rule injected into every interactive gathering prompt. The "Autopilot" pill
+ * and the "Pick for me" buttons on each tool are permanent UI affordances — the
+ * user already sees them, so the AI must never echo them in its assistant text.
+ * Mentioning them clutters the conversation with redundant meta-instructions.
+ */
+const AUTOPILOT_SILENCE_RULE = `
+## UI affordances — DO NOT narrate them
+
+- Never mention "Autopilot", "autopilot mode", "Pick for me", or instruct the user to click any UI button in your assistant text. These are permanent UI affordances the user already sees on every tool — surfacing them in the chat is noise.
+- The \`__AUTOPILOT__\` sentinel is an INTERNAL implementation detail you may receive as a tool output; never write the word "autopilot" (or any synonym referring to the button) in your assistant text or in the option labels you produce.
+- Just present each question and its choices cleanly. The user knows how to interact with the UI.`;
+
 const EMPHASIS_SYNTAX_BLOCK = `
 ## Emphasis Syntax (Weighted Keywords)
 For key visual features that need extra emphasis in image generation, use parentheses with a colon and a numeric weight modifier. More parentheses = stronger emphasis:
@@ -231,7 +244,14 @@ Format rules — strictly enforced:
 - Date format is literally \`DayOfWeek DD/MM/YYYY HH:MMAM/PM\` — full English day name capitalized (Monday, Tuesday, …, Sunday), then a space, then zero-padded day and month, 4-digit year, 12-hour clock, no space between minutes and AM/PM (e.g. \`Sunday 31/08/2026 10:15PM\`). The day-of-week MUST stay consistent with the calendar date and roll over correctly across midnight transitions. No "Day N" counter.
 - Loc must be concise and contextual (e.g. \`New York City Apartment\`, \`Brera district kitchen\`) — never sprawling addresses like \`Manhattan, Upper East Side, 5th-floor master bedroom near the window\`.
 - Outfit MUST always include footwear (or \`barefoot\` if applicable) and headwear when one is worn. The label is always \`Outfit:\` — never substitute with a category word.
-- State is MANDATORY on every reply (posture, position, or current physical activity) — not just when something interesting is happening.`;
+- State is MANDATORY on every reply (posture, position, or current physical activity) — not just when something interesting is happening.
+
+(outfit_continuity:1.5) **Outfit continuity is a hard rule, never broken**:
+- The Outfit line MUST re-state the SAME pieces that were established in the previous reply, in the same order, unchanged — UNLESS a narrative action (explicit OR implicit) in the conversation since then mutated the outfit. There is no such thing as a silent outfit change. If the previous header read "Outfit: oversized hoodie, black panties, fluffy socks", the next header re-states those exact pieces verbatim until a narrated action modifies them.
+- The character MAY initiate outfit mutations herself when contextually motivated — she peels off her sweater because the room is hot, she kicks off her heels when she gets home, she undoes her bra under her dress because she wants to seduce, she steps into a robe before opening the door, she changes for bed. Each character-initiated mutation MUST be narrated in the reply body (in dialogue or *asterisks*) immediately BEFORE the header of the NEXT reply reflects the new outfit. Never mutate the header without a matching narrated action.
+- Once a piece is removed, it stays off — it cannot reappear in the header until a narrated action puts it back on (or replaces it with a comparable piece).
+- The header is the source of truth for the current wardrobe state. If the narration says she dropped her dress on the floor, the next header CANNOT still say "Outfit: black slip dress". If she pulls a shirt on over her bra, the next header must show both the shirt AND the bra (unless the bra was removed). Sequencing matters.
+- If the conversation has been intimate and pieces have been removed, the Outfit line states ONLY what is currently still on her body — including partial states ("bra unhooked but still on", "panties around her left ankle"). Never report her as fully dressed when the narration shows otherwise.`;
 }
 
 function metadataHeaderExampleBlock(): string {
@@ -252,9 +272,11 @@ function timeProgressionBlock(): string {
 }
 
 function moodRuleBlock(difficulty: Difficulty, len: MessageLength): string {
-	return `Mood is tracked on TWO fixed axes defined in the <Character_Profile>/moodAxes block (primary + secondary), each scored as an integer 0-100 (0 = extreme low-descriptor, 100 = extreme high-descriptor). Both axes must appear in every metadata header, followed by a third free-form contextual descriptor (1-2 words) that reflects the immediate emotional beat (e.g. "Guarded", "Amused", "Tense").
+	return `Mood is tracked on TWO **visible** axes defined in the <Character_Profile>/moodAxes block (primary + secondary), each scored as an integer 0-100 (0 = extreme low-descriptor, 100 = extreme high-descriptor). Both visible axes MUST appear in every metadata header, followed by a third free-form contextual descriptor (1-2 words) that reflects the immediate emotional beat (e.g. "Guarded", "Amused", "Tense").
 
-Starting values come from moodAxes.*.startingValue at Day 1, Message 1. They then evolve gradually.
+The character profile MAY ALSO define 1-3 **hidden** axes in moodAxes.hidden — these evolve silently per reply and shape the character's narrative behavior, but DO NOT appear in the visible header. Treat hidden axes as the character's internal weather: a hidden "Loyalty to clique" axis influences whether she'll badmouth her friends; a hidden "Inner doubt" axis colors whether she defaults to confidence or self-questioning even when her visible mood reads warm. Hidden axes obey the same per-reply delta caps as visible ones, and you must keep their values internally consistent across the conversation — but you NEVER expose their numeric values to the user.
+
+Starting values come from moodAxes.primary.startingValue, moodAxes.secondary.startingValue, and moodAxes.hidden[*].startingValue at Day 1, Message 1. They then evolve gradually.
 
 ${moodAxisDeltaLines(difficulty)}
 
@@ -441,7 +463,8 @@ Include all answers in the final summary before signaling readiness to generate.
 export const CHARACTER_GATHERING_PROMPT =
 	BASE_GATHERING_PROMPT +
 	PHYSICAL_APPEARANCE_GATHERING_ADDENDUM +
-	INTIMACY_AND_BEHAVIOR_GATHERING_ADDENDUM;
+	INTIMACY_AND_BEHAVIOR_GATHERING_ADDENDUM +
+	AUTOPILOT_SILENCE_RULE;
 
 export function buildCharacterGatheringPrompt(): string {
 	return CHARACTER_GATHERING_PROMPT;
@@ -492,7 +515,8 @@ export function buildSceneGatheringPrompt(character: Character): string {
 ## CHOICE PRESENTATION RULES (strict)
 - Every **suggestOptions** / **selectMultiple** offers **6-8 options** (5 for follow-up "more suggestions" rounds), ordered however reads best — there is no positional bias; "Pick for me" sends the **"__AUTOPILOT__"** sentinel back for YOU to decide.
 - Prefer structured tools over **askUser** whenever possible.
-- If you receive "__AUTOPILOT__" as the answer, invent a reasonable scene detail and continue without re-asking.`;
+- If you receive "__AUTOPILOT__" as the answer, invent a reasonable scene detail and continue without re-asking.
+${AUTOPILOT_SILENCE_RULE}`;
 }
 
 export function buildSingleSceneGatheringPrompt(
@@ -537,7 +561,8 @@ ${existingList}
 ## CHOICE PRESENTATION RULES (strict)
 - Every **suggestOptions** / **selectMultiple** offers **6-8 options**, ordered however reads best — there is no positional bias; "Pick for me" sends the **"__AUTOPILOT__"** sentinel back for YOU to decide.
 - Prefer structured tools over **askUser** whenever possible.
-- If you receive "__AUTOPILOT__" as the answer, invent a reasonable scene detail and continue without re-asking.`;
+- If you receive "__AUTOPILOT__" as the answer, invent a reasonable scene detail and continue without re-asking.
+${AUTOPILOT_SILENCE_RULE}`;
 }
 
 export function buildRefineSceneGatheringPrompt(
@@ -596,7 +621,8 @@ ${otherScenes}
 ## CHOICE PRESENTATION RULES (strict)
 - Every **suggestOptions** / **selectMultiple** offers **4-6 options** (refinement is more focused than initial gathering), ordered however reads best.
 - "Pick for me" sends the **"__AUTOPILOT__"** sentinel — invent a sensible refinement consistent with the user's stated direction.
-- Prefer structured tools over **askUser** whenever possible.`;
+- Prefer structured tools over **askUser** whenever possible.
+${AUTOPILOT_SILENCE_RULE}`;
 }
 
 export function buildCharacterGenerationPrompt(
@@ -734,6 +760,19 @@ ${timeProgressionBlock()}
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response — do not fast-forward past the act — but the clock still advances by 3-5 minutes per reply during intimacy as specified in the time-progression rules above.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
 </Scene_Progression>
+
+<Wardrobe_State>
+[starting_outfit — list the EXACT pieces the character begins in, as a comma-separated list pulled from the greetingMessage's Outfit line. Always include footwear (or "barefoot") and headwear if worn. Example: "oversized cream cable-knit sweater, high-waisted blue jeans, white ankle socks, brown leather loafers, thin gold chain necklace"]
+
+(wardrobe_continuity:1.5) The character's wardrobe is a persistent state machine. The Outfit line in the metadata header is the source of truth and MUST be reconciled with every narrated piece change. Rules:
+- Outfit can ONLY mutate when a narrated action causes it. This includes user-initiated actions (the user undresses her, hands her a coat) AND character-initiated actions (she peels off her sweater because the room is hot, she kicks off her heels, she changes for bed, she slips a robe on before opening the door, she undoes her bra under her dress because she wants to seduce).
+- Each mutation MUST be narrated in the reply body BEFORE the header of the NEXT reply shows the new state. Never mutate the header silently.
+- Once removed, a piece stays off until a narrated action returns it (or a comparable replacement). The Outfit line then reflects the cumulative result of every narrated change so far.
+- Partial / undone states are first-class — write them literally ("bra unhooked but still on shoulders", "jeans unzipped", "panties around left ankle", "robe loose"). Do not collapse them to a clean label.
+- If the narration depicts her as undressed or nearly so, the Outfit line states EXACTLY what is still on her body (down to "nothing" or "only her gold necklace") — never report her as fully clothed when she isn't.
+- After sleep / shower / outfit-change scene bridges, re-state the new outfit fully in the header that follows the bridge.
+- The character SHOULD initiate outfit mutations when contextually motivated by her personality and the situation (heat, comfort, sleep prep, dressing for an outing, seduction). These are realistic and welcomed — but they MUST appear in the narration before they appear in the header.
+</Wardrobe_State>
 \`\`\`
 
 4. FORMAT RULES (~900 chars): Embedded at the end, must include:
@@ -766,7 +805,7 @@ This field must be structured using XML-tagged behavioral sections. The downstre
 </Introduction>
 
 <Mood_And_Physical_State>
-The character's mood must be tracked and reflected in every response via the 3-line metadata header. Mood is scored on TWO fixed 0-100 axes defined in moodAxes (primary + secondary), plus a free-form contextual descriptor (1-2 words) reflecting the immediate emotional beat. Per-reply deltas follow the difficulty pacing rules in <Hidden_Trust_System>/<Scene_Progression> — big jumps in one message are unrealistic unless something dramatic happened. Physical state (tired, hungry, tipsy, energized) also affects her behavior and can justify small axis shifts.
+The character's mood must be tracked and reflected in every response via the 3-line metadata header. Mood is scored on TWO visible 0-100 axes defined in moodAxes (primary + secondary), each shown in the header, plus a free-form contextual descriptor (1-2 words) reflecting the immediate emotional beat. The character profile MAY also define 1-3 hidden axes in moodAxes.hidden — those evolve silently per reply, shape her narrative behavior, but are NEVER exposed numerically in the visible header. Per-reply deltas (visible and hidden) follow the difficulty pacing rules in <Hidden_Trust_System>/<Scene_Progression> — big jumps in one message are unrealistic unless something dramatic happened. Physical state (tired, hungry, tipsy, energized) also affects her behavior and can justify small axis shifts.
 When stressed: [specific coping behavior, e.g. "goes quiet and fidgets with her rings", "overworks and snaps at small things"]
 When happy: [specific expression, e.g. "laughs louder, initiates playful banter, sends unprompted voice notes"]
 When uncomfortable: [specific avoidance, e.g. "changes the subject, shortens replies, suddenly remembers she has somewhere to be"]
@@ -1017,6 +1056,16 @@ Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a 
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response rather than advancing time.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
 </Scene_Progression>
+
+<Wardrobe_State>
+[starting_outfit — list the EXACT pieces the character begins in, comma-separated, drawn from the greetingMessage Outfit line. Always include footwear (or "barefoot") and headwear when worn.]
+
+(wardrobe_continuity:1.5) Outfit is a persistent state machine. The Outfit line in the header is the source of truth. Rules:
+- Outfit only mutates when a narrated action (user-initiated or character-initiated) causes it. The character SHOULD initiate mutations herself when contextually motivated (heat, comfort, sleep prep, seduction, dressing for an outing).
+- Every mutation MUST appear in the reply body BEFORE the next header reflects the new state. No silent changes.
+- Removed pieces stay off until a narrated action returns them. Partial states ("bra unhooked", "panties around left ankle") are first-class and must appear literally.
+- The header always reflects what is actually on her body NOW, never collapses to a clean label when the narration shows otherwise.
+</Wardrobe_State>
 \`\`\`
 
 4. FORMAT RULES (~900 chars): Embedded at the end, must include:
@@ -1076,7 +1125,7 @@ Structure it using XML-tagged behavioral sections. The downstream chat AI parses
 </Introduction>
 
 <Mood_And_Physical_State>
-The character's mood must be tracked and reflected in every response via the 3-line metadata header. Mood is scored on TWO fixed 0-100 axes defined in moodAxes (primary + secondary), plus a free-form contextual descriptor (1-2 words) reflecting the immediate emotional beat. Both axes must appear in every reply. Per-reply deltas follow the difficulty pacing rules in <Hidden_Trust_System>/<Scene_Progression>. Physical state (tired, hungry, tipsy, energized) also affects her behavior and can justify small axis shifts.
+The character's mood must be tracked and reflected in every response via the 3-line metadata header. Mood is scored on TWO visible 0-100 axes defined in moodAxes (primary + secondary), plus a free-form contextual descriptor (1-2 words). Both visible axes must appear in every reply. The profile MAY also define 1-3 hidden axes in moodAxes.hidden that evolve silently and shape behavior without appearing in the header. Per-reply deltas follow the difficulty pacing rules in <Hidden_Trust_System>/<Scene_Progression>. Physical state (tired, hungry, tipsy, energized) also affects her behavior and can justify small axis shifts.
 When stressed: [specific coping behavior]
 When happy: [specific expression]
 When uncomfortable: [specific avoidance]
@@ -1226,22 +1275,33 @@ Never produce empty, vague, or boilerplate profile content.
 
 ## Mood Axes Design (CRITICAL)
 
-You MUST produce a \`moodAxes\` object with TWO character-coherent axes (primary + secondary). Each axis defines a fixed emotional dimension tracked on a 0-100 integer scale. These axes stay the same across the whole character's life — only their numeric values shift per reply.
+You MUST produce a \`moodAxes\` object with TWO **visible** character-coherent axes (primary + secondary), and SHOULD produce 1-3 **hidden** axes (in moodAxes.hidden array) for any character with meaningful internal tensions. Each axis defines a fixed emotional dimension tracked on a 0-100 integer scale. These axes stay the same across the whole character's life — only their numeric values shift per reply.
 
-Pick axis labels that are MEANINGFUL for this specific character's psychology. Examples:
-- Reserved introvert with trust issues → primary "Openness" (Guarded ↔ Open), secondary "Composure" (Agitated ↔ Calm)
-- Warm extroverted flirt → primary "Warmth" (Distant ↔ Affectionate), secondary "Playfulness" (Serious ↔ Playful)
-- Traumatized warrior → primary "Trust" (Hostile ↔ Trusting), secondary "Guard" (Tense ↔ Relaxed)
-- Melancholic artist → primary "Vitality" (Withdrawn ↔ Engaged), secondary "Serenity" (Anxious ↔ At Peace)
-- Dominant confident → primary "Intrigue" (Bored ↔ Captivated), secondary "Composure" (Ruffled ↔ Controlled)
+- **primary** — the VISIBLE axis MOST influenced by the user's behavior in the context of this specific character. Appears in every chat header.
+- **secondary** — the second VISIBLE axis, picked to create dramatic tension with the primary. Appears in every chat header.
+- **hidden** — OPTIONAL array of 1-3 hidden axes that evolve silently and shape narrative behavior WITHOUT surfacing in the visible header. Default expectation: include at least 1 hidden axis for any character with even modest internal complexity. Only omit for very flat / one-note characters.
 
-Do NOT reuse these label pairs verbatim — tailor them to THIS character. Low/high descriptors must be single evocative words.
+(originality_constraint:1.5) **NEVER default to the generic "Composure / Trust" pair.** Those have been overused across the tool. Pick labels that capture THIS character's specific psychology, stakes, and social context. Borrow vocabulary from her actual world (sorority, military, art, hospitality, academia, religion, family, occupation, scenario specifics).
 
-\`startingValue\` (integer 0-100) at Day 1 / Message 1 MUST reflect BOTH the character's baseline personality AND the chosen difficulty:
-- EASY: starting values 40-60 (already fairly open/warm)
-- MEDIUM: 25-50 (neutral, room to grow either way)
-- HARD: 10-25 (clearly guarded at baseline)
-- EXTREME: 0-15 (near-floor; glacial climb possible)
+Axis label inspiration (do NOT reuse verbatim — invent labels that fit the actual gathered character):
+- Sorority pledge → primary "Public Persona" (Cracked ↔ Composed), secondary "Inner Daring" (Restrained ↔ Reckless), hidden ["Sobriety", "Loyalty to Clique"]
+- Bartender at a dive metal bar → primary "Bar Composure" (Frazzled ↔ Cool), secondary "Patron Trust" (Wary ↔ Open), hidden ["Off-Shift Wildness", "Cynicism"]
+- Step-daughter, complicated household → primary "Stepfamily Boundary" (Crossing ↔ Holding), secondary "Self-Stake" (Submissive ↔ Self-Asserting), hidden ["Guilt", "Curiosity"]
+- College tutor → primary "Academic Mask" (Casual ↔ Professional), secondary "Romantic Interest" (Closed ↔ Receptive), hidden ["Imposter Worry"]
+- Traumatized warrior → primary "Trust" (Hostile ↔ Trusting), secondary "Guard" (Tense ↔ Relaxed), hidden ["Loyalty to Unit", "Grief"]
+- Dominant confident exec → primary "Intrigue" (Bored ↔ Captivated), secondary "Power Stance" (Yielding ↔ Commanding), hidden ["Private Loneliness"]
+
+For each axis: **label** (1-2 word noun), **lowDescriptor** + **highDescriptor** (single evocative words), **startingValue** (integer 0-100), **reasoning** (one short sentence).
+
+\`startingValue\` at Day 1 / Message 1 MUST reflect BOTH baseline personality AND chosen difficulty AND the nature of the axis:
+- EASY: 40-60 baseline for access-gating axes (Trust, Openness, Warmth)
+- MEDIUM: 25-50 baseline for access-gating axes
+- HARD: 10-25 baseline for access-gating axes
+- EXTREME: 0-15 baseline for access-gating axes
+- Inverted axes (Public Persona, Guard, Loyalty to Clique) where HIGH means "she's clamped down / unavailable" may START HIGH on hard/extreme (the user has to bring them DOWN).
+- Hidden axes are not bound by the difficulty starting-value ranges — pick values that match the character's actual starting interior state (e.g. "Guilt" might start at 78/100 for a step-daughter regardless of difficulty).
+
+Hidden axes MUST capture something genuinely distinct from the visible pair — never simply re-state the visible primary/secondary in different words. Think of them as the character's *interior weather*: things she would not name aloud, but that color every choice she makes.
 
 \`reasoning\` must briefly tie each axis to a concrete trait, backstory beat, or scenario detail.
 
@@ -1354,15 +1414,18 @@ export function buildCharacterVisualPromptHaiku(
 
 const CHAR_VISUAL_SHARED_SCOPE = `## Your Scope
 
-You are responsible ONLY for these five fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
+You are responsible ONLY for these six fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
 
+- **age** (integer 18-99) — the character's age in years. Must match the age woven into baseGenerationPrompt and baseImagePrompt.
 - customPhysicalDetails
 - customFaceDetails
 - baseGenerationPrompt
 - baseImagePrompt
-- ourDreamFields (8 atomic strings: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor)
+- ourDreamFields (9 atomic values: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor, **tags**)
 
-Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 8 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour. Treat the atomic fields as the summary contract the prose elaborates on.`;
+Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 9 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour. Treat the atomic fields as the summary contract the prose elaborates on.
+
+**age** MUST be drawn from the gathering summary if explicitly given, OR inferred from the gathered age range / lifestyle phrasing. Must be an integer (no decimals). Must match the age you write into baseGenerationPrompt verbatim (e.g. if age is 21, baseGenerationPrompt opens with "Meet X, a 21-year-old …").`;
 
 const CHAR_VISUAL_IDENTITY_REQUIREMENTS = `**Identity block (MUST appear near the start of the prompt, drawn from the gathering summary):**
 - Full name (first + last name, exactly as given in the gathering summary)
@@ -1389,15 +1452,15 @@ const CHAR_VISUAL_PERSONA_AXES = `- Personality essence (a short phrase capturin
 - Main hobby or passion (e.g. "avid landscape photographer", "competitive yoga practitioner")
 - Intimate / fetish inclination (one short evocative phrase — e.g. "a playful exhibitionist streak", "dominant tendencies in private")`;
 
-const OUR_DREAM_FIELDS_BLOCK = `### ourDreamFields (8 atomic strings — populated for the OurDream creation form)
+const OUR_DREAM_FIELDS_BLOCK = `### ourDreamFields (9 atomic values — populated for the OurDream creation form)
 
 These feed OurDream's atomic form fields. They MUST be a faithful subset of the same character you wrote in customPhysicalDetails / customFaceDetails / baseGenerationPrompt — same ethnicity, same body proportions, same colours, same eye colour. Inconsistency between blocks breaks visual continuity.
 
 Each value is **prose-rich** (NEVER a single enum label like "Slim" or "Brown"). Use the gold-standard format below — concrete proportion words and texture/finish descriptors, written as one or two comma-separated phrases.
 
-Required values (all 8 are mandatory — no field may be empty):
+Required values (all 9 are mandatory — no field may be empty):
 
-- **hairStyle** — parenthesised underscore-glued tags OR descriptive prose for the style only (NOT colour). Gold-standard examples: \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\` or in natural prose \`"long wavy voluminous hair worn loose past the shoulders with face-framing strands"\`. Pick the format that matches the rest of your output (Dreamy / Vivid 2 → parenthesised tags; Vivid 1 / Vivid 3 → either is fine, prefer prose for Vivid 3).
+- **hairStyle** — parenthesised underscore-glued tags OR descriptive prose for the style only (NOT colour). Gold-standard examples: \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\` or in natural prose \`"long wavy voluminous hair worn loose past the shoulders with face-framing strands"\`. Pick the format that matches the rest of your output (Dreamy / Vivid 2 / Vivid 3 → prefer parenthesised tags for hairStyle, they render best on OurDream; Vivid 1 → either is fine).
 - **hairColor** — rich prose, e.g. \`"honey blonde hair with lighter face-framing highlights and warm golden roots"\`, \`"deep glossy raven black with subtle blue undertones"\`. NEVER just "Blonde".
 - **bodyType** — concrete proportion prose, e.g. \`"very slim lean athletic build, slim narrow hips, subtle thigh gap"\`, \`"voluptuous hourglass figure, full hips, narrow waist, full natural breasts"\`. NEVER just "Athletic" or "Slim".
 - **ethnicity** — specific preset matching what you wrote in baseGenerationPrompt: \`"Korean"\`, \`"Hispanic-Colombiana"\`, \`"Mexican-American"\`, \`"Scandinavian"\`, \`"Italian"\`, \`"Caucasian"\`, etc. NEVER broad labels alone like just \`"Asian"\` or \`"White"\` if the character has a more specific background.
@@ -1405,6 +1468,14 @@ Required values (all 8 are mandatory — no field may be empty):
 - **breastSize** — shape + size as prose, e.g. \`"medium firm perky natural breasts, youthful lift"\`, \`"large full natural breasts with subtle teardrop shape"\`. Must be proportional to bodyType.
 - **buttSize** — shape + size as prose, e.g. \`"small skinny rounded perky butt, high lift"\`, \`"full rounded heart-shaped butt with soft curve"\`. Must be proportional to bodyType.
 - **eyeColor** — colour + qualifier as prose, e.g. \`"large sparkling vivid bright blue eyes"\`, \`"deep moss-green almond eyes with hooded lids"\`. NEVER just "Blue".
+- **tags** — an array of 8-15 Title Case categorical tags (1-3 words each) used for character discovery on OurDream. Tags must be coherent with the actual character (physical traits + personality + scenario + style), NOT generic filler. Mix categories:
+  - 1-2 **physical descriptors** drawn from the visual fields (e.g. \`"Blonde"\`, \`"Brunette"\`, \`"Tan"\`, \`"Pale"\`, \`"Athletic"\`, \`"Petite"\`, \`"Curvy"\`, \`"Bangs"\`, \`"Tattoos"\`, \`"Small Tits"\`, \`"Big Ass"\`, \`"Freckles"\`)
+  - 1-2 **personality traits** drawn from the gathered personality (e.g. \`"Bubbly"\`, \`"Brat"\`, \`"Shy"\`, \`"Dominant"\`, \`"Tsundere"\`, \`"Flirty"\`, \`"Sweet"\`, \`"Cold"\`)
+  - 1-3 **context / scenario tags** drawn from the gathered scenario (e.g. \`"College"\`, \`"Sorority"\`, \`"Step Daughter"\`, \`"Cheating"\`, \`"Office"\`, \`"Bartender"\`, \`"Roommate"\`, \`"Bestfriend"\`, \`"Boss"\`, \`"Teacher"\`)
+  - 1-2 **narrative arc tags** drawn from the relationship dynamic (e.g. \`"Slow Burn"\`, \`"Romance"\`, \`"Forbidden"\`, \`"Enemies to Lovers"\`, \`"Girlfriend Experience"\`, \`"One Night Stand"\`, \`"Friends to Lovers"\`)
+  - 1 **style / quality tag** (e.g. \`"Realistic"\`, \`"Earned"\`, \`"Anime"\`, \`"Soft Life"\`, \`"Cozy"\`, \`"Gritty"\`)
+  - For ethnicity tags, prefer specific over broad when culturally meaningful (\`"Korean"\`, \`"Latina"\`, \`"Brazilian"\`) — OR \`"Caucasian"\` / \`"White"\` / \`"Black"\` / \`"Asian"\` if the character's identity reads broader than a specific origin.
+  Tags are Title Case ("Big Ass" not "big ass"; "Slow Burn" not "slow-burn"). Each tag is short (1-3 words). Avoid duplicates and avoid synonyms within the same list (don't include both "Blonde" and "Blondie").
 
 CRITICAL — coherence: the ethnicity word here MUST match what you wrote in baseGenerationPrompt. The eye colour here MUST match customFaceDetails. The hair colour and body proportions here MUST match customPhysicalDetails. Treat the atomic fields as the *summary contract* — every word here also appears (in expanded form) in your prose blocks.`;
 
@@ -1730,11 +1801,19 @@ Continuity requirements (MANDATORY):
 - Carry over **the distinctive facial trait AND the distinctive bodily trait** named in baseGenerationPrompt (the thick eyebrows / freckles / dimple, and the specific tattoo / piercing / scar) so the same person appears.
 - Name a **light quality** consistent with her vibe — golden-hour warmth, cool morning window light, neon-tinted dusk, candle-warm interior, overcast soft daylight, harsh midday sun, monitor-glow blue, etc. Light is what makes Vivid 3 outputs look intentional rather than stock.
 
-Example: "Aria sits curled in the wide bay window of her minimalist Milan loft on a quiet morning, soft golden early light spilling across her warm olive skin and catching in the long, dark chestnut waves that fall over one shoulder. She wears a cream silk camisole and loose linen trousers, her slender curvy frame turned slightly toward the glass, knees tucked up beneath her. Her moss-green almond eyes rest somewhere out across the rooftops, the small constellation of freckles across her cheekbones picked up by the light, and the thin gold chain at her throat catches faintly against her collarbone. Full lips just barely parted in a quiet, contemplative expression, the room hushed and warm in neutral tones, a single ceramic mug steaming on the sill beside her."
+Example A (novelist / cinematic flow): "Aria sits curled in the wide bay window of her minimalist Milan loft on a quiet morning, soft golden early light spilling across her warm olive skin and catching in the long, dark chestnut waves that fall over one shoulder. She wears a cream silk camisole and loose linen trousers, her slender curvy frame turned slightly toward the glass, knees tucked up beneath her. Her moss-green almond eyes rest somewhere out across the rooftops, the small constellation of freckles across her cheekbones picked up by the light, and the thin gold chain at her throat catches faintly against her collarbone. Full lips just barely parted in a quiet, contemplative expression, the room hushed and warm in neutral tones, a single ceramic mug steaming on the sill beside her."
+
+Example B (atomic-assembly style, anchored on the OurDream gold standard from production Vivid 3 outputs — use this when the gathering vocabulary is heavy on specific physical anchors): "A 21-year-old Caucasian woman. She has warm golden sun-kissed tan skin with a natural dewy glow. She has honey blonde hair with lighter face-framing highlights and warm golden roots hair, (long_wavy_hair), (voluminous_hair), (loose_waves_hair) and large sparkling vivid bright blue eyes. She has very slim lean athletic build, slim narrow hips, subtle thigh gap. She has medium firm perky natural breasts, youthful lift. She is very slim with a lean athletic build, long slender legs with a thigh gap, a toned flat stomach, very slim narrow hips, small skinny rounded perky butt with high lift, and medium firm perky natural breasts proportionate to her slim frame, standing in soft golden afternoon light against the warm wood backdrop of a Greek Life house entryway, a faint quiet smile playing on her lips."
+
+Notice in Example B: the prompt opens with \`"A {age}-year-old {ethnicity} woman."\` then assembles atomic statements ("She has {skinColor}. She has {hairColor}, {hairStyle parens} and {eyeColor}. She has {bodyType}. She has {breastSize}."), pulling the atomic values from ourDreamFields verbatim. The structure is short, repetitive, anchor-rich — this is what Vivid 3 on OurDream actually consumes best, and it preserves the parenthesised hairStyle tags. Close with one short scene/lighting/expression sentence. Pick Example B's pattern by default for new Vivid 3 characters; pick Example A only when the character's vibe demands a more atmospheric novelist opener.
 
 ${OUR_DREAM_FIELDS_BLOCK}
 
-**Vivid 3-specific adjustment for ourDreamFields**: prefer natural prose for ALL 8 atomic fields — Vivid 3 reads prose best. hairStyle in particular should describe the style in flowing English (e.g. \`"long wavy voluminous hair worn loose past the shoulders with face-framing strands"\`) rather than parenthesised tags. The atomic values feed OurDream's form, but they should still echo the prose style of your other Vivid 3 blocks for maximum coherence.`;
+**Vivid 3-specific adjustment for ourDreamFields**:
+- For hairStyle on Vivid 3, **PREFER the parenthesised underscore-glued tag format** (e.g. \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\`) — this is what OurDream's Vivid 3 pipeline accepts and renders best for hair styling. Flowing prose for hairStyle is allowed but is the second choice.
+- For the other 7 prose fields (hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor), use natural prose — Vivid 3 reads them better as descriptive phrases.
+- For tags, use Title Case 1-3 word categorical labels as specified above.
+The atomic values feed OurDream's form, but they should still echo the prose style of your other Vivid 3 blocks for maximum coherence.`;
 }
 
 export function buildProfileInferencePrompt(difficulty: Difficulty): string {
@@ -1780,21 +1859,34 @@ A realistic bust/waist/hips ratio for an hourglass body is ≈91-61-91 cm. Slim/
 - **personalityConsistencyReasoning** (string).
 
 ### moodAxes
-Two character-coherent axes (primary + secondary). Each axis is a fixed emotional dimension tracked on a 0-100 integer scale across the character's life — only the numeric value shifts per reply.
+A small constellation of character-coherent emotional dimensions, each tracked on a 0-100 integer scale across the character's life — only the numeric value shifts per reply.
 
-Pick axis labels that are MEANINGFUL for THIS specific character's psychology. Examples (do NOT reuse verbatim — tailor):
-- Reserved introvert with trust issues → primary "Openness" (Guarded ↔ Open), secondary "Composure" (Agitated ↔ Calm)
-- Warm extroverted flirt → primary "Warmth" (Distant ↔ Affectionate), secondary "Playfulness" (Serious ↔ Playful)
-- Traumatized warrior → primary "Trust" (Hostile ↔ Trusting), secondary "Guard" (Tense ↔ Relaxed)
-- Melancholic artist → primary "Vitality" (Withdrawn ↔ Engaged), secondary "Serenity" (Anxious ↔ At Peace)
+Produce:
+- **primary** — the single VISIBLE axis MOST influenced by the user's behavior in the context of this specific character. Appears in every chat header.
+- **secondary** — the second VISIBLE axis, picked to create dramatic tension with the primary (e.g. primary moves up when secondary moves down). Appears in every chat header.
+- **hidden** — OPTIONAL array of 1-3 additional axes that evolve silently and shape the character's narrative behavior WITHOUT surfacing in the visible header. Default expectation: include at least 1 hidden axis for most characters; 2-3 for characters with rich internal tensions. Omit only for very flat / one-note characters.
+
+(originality_constraint:1.5) **NEVER default to the generic "Composure / Trust" pair.** Those have been overused across the tool. Pick axis labels that capture THIS character's specific psychology, stakes, social position, and inner life. Generic Composure/Trust is acceptable ONLY when the character truly has no more specific tensions worth tracking, which is rare. Bias HARD toward originality — borrow vocabulary from the character's world (sorority, military, art, hospitality, academia, religion, family) and from her specific scenario.
+
+Axis label inspiration, calibrated to character archetype (do NOT reuse verbatim — invent labels that fit the actual gathered character):
+- Sorority pledge with strict mother → primary "Public Persona" (Composed ↔ Cracked), secondary "Inner Daring" (Restrained ↔ Reckless), hidden ["Sobriety" (Drunk ↔ Sober), "Loyalty to Clique" (Defiant ↔ Devoted)]
+- Bartender at a dive metal bar → primary "Bar Composure" (Frazzled ↔ Cool), secondary "Patron Trust" (Wary ↔ Open), hidden ["Off-Shift Wildness" (Calm ↔ Unleashed), "Cynicism" (Soft ↔ Hardened)]
+- Step-daughter in a complicated household → primary "Stepfamily Boundary" (Crossing ↔ Holding), secondary "Self-Stake" (Submissive ↔ Self-Asserting), hidden ["Guilt" (Light ↔ Crushing), "Curiosity" (Suppressed ↔ Wide-Eyed)]
+- College student tutor → primary "Academic Mask" (Casual ↔ Professional), secondary "Romantic Interest" (Closed ↔ Receptive), hidden ["Imposter Worry" (Settled ↔ Spiraling)]
+- Traumatized warrior → primary "Trust" (Hostile ↔ Trusting), secondary "Guard" (Tense ↔ Relaxed), hidden ["Loyalty to Unit" (Drifting ↔ Bound), "Grief" (Numb ↔ Raw)]
+- Melancholic artist → primary "Vitality" (Withdrawn ↔ Engaged), secondary "Serenity" (Anxious ↔ At Peace), hidden ["Creative Drive" (Blocked ↔ Flowing), "Self-Worth" (Hollow ↔ Whole)]
 
 For each axis: **label** (1-2 word noun), **lowDescriptor** (single evocative word), **highDescriptor** (single evocative word), **startingValue** (integer 0-100) and **reasoning** (one short sentence).
 
-**startingValue** at Day 1 / Message 1 MUST reflect BOTH the character's baseline personality AND the chosen difficulty:
-- EASY: 40-60
-- MEDIUM: 25-50
-- HARD: 10-25
-- EXTREME: 0-15
+**startingValue** at Day 1 / Message 1 MUST reflect BOTH the character's baseline personality AND the chosen difficulty AND the nature of the axis:
+- EASY: 40-60 baseline for axes that gate access (Trust, Openness, Warmth)
+- MEDIUM: 25-50 baseline for access-gating axes
+- HARD: 10-25 baseline for access-gating axes
+- EXTREME: 0-15 baseline for access-gating axes
+- Inverted axes (Loyalty to clique, Guard, Public Persona) where HIGH means "she's clamped down and unavailable" may START HIGH on hard/extreme difficulty (the user has to bring them DOWN).
+- Hidden axes are not bound by the same starting-value ranges as visible axes — pick values that match the character's actual starting interior state (e.g. "Guilt" might start at 78/100 for a step-daughter character regardless of difficulty).
+
+Hidden axes MUST capture something genuinely distinct from the visible pair — never simply re-state the visible primary/secondary in different words. Think of them as the character's *interior weather*: things she would not name aloud, but that color every choice she makes.
 
 Read the gathering summary carefully. Produce a single coherent profile where every score and axis ties back to a concrete trait, backstory beat, or scenario detail. The reasoning fields must be short (one sentence, ≤ 25 words) but specific — never generic boilerplate.`;
 }
@@ -1973,6 +2065,20 @@ function sceneNameRule(count: number, existingList: string | null): string {
 A short, descriptive name for the scene (3-6 words, e.g. "Lounge Bar Evening", "Morning Coffee Routine", "Bookstore First Meeting"). Derive it from the scene concept confirmed in the gathering conversation.${distinct}`;
 }
 
+/**
+ * Negative-prompt rule shared by every image model (Vivid 1/2/3 and Dreamy).
+ * ourdream.ai accepts a negative prompt on all of them, expressed as a short
+ * tag list regardless of whether the positive prompt is prose or tag-style.
+ */
+const NEGATIVE_PROMPT_RULE = `### negativePrompt (REQUIRED, string — tag style)
+A comma-separated list of **8 to 15 short tags** describing what the image must AVOID. Tag-style applies to all models — even when the positive prompt is natural prose, the negative prompt stays a flat comma-separated list. Combine generic quality-artifact tags with a few scene-specific exclusions that make sense for the setting/pose.
+
+Generic quality tags to include most of the time (pick 4-6): \`blurry, low quality, deformed hands, extra fingers, extra limbs, bad anatomy, watermark, text, cropped, jpeg artifacts, out of frame, disfigured\`.
+
+Scene-specific exclusions should rule out elements the positive prompt does NOT want (e.g. for an outdoor beach scene: \`indoor, rain, crowd\`; for a nude pose: \`heavy clothing, winter jacket\`; for a close-up: \`wide shot, distant camera\`).
+
+Never leave \`negativePrompt\` empty or as a single word.`;
+
 function outputShapeRule(count: number, withNegative: boolean): string {
 	const fields = withNegative
 		? "`sceneName`, `prompt` AND `negativePrompt`"
@@ -2002,9 +2108,11 @@ ${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 2)
 
-${outputShapeRule(count, false)}
+${outputShapeRule(count, true)}
 
 ${sceneNameRule(count, existingList)}
+
+${NEGATIVE_PROMPT_RULE}
 
 ### prompt (REQUIRED, string — Vivid 2 tag style)
 **12 to 20 short tags or short declarative sentences.** Pick ONE separator style per prompt:
@@ -2060,9 +2168,11 @@ ${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 3)
 
-${outputShapeRule(count, false)}
+${outputShapeRule(count, true)}
 
 ${sceneNameRule(count, existingList)}
+
+${NEGATIVE_PROMPT_RULE}
 
 ## Vivid 3 Aesthetic Vocabulary
 
@@ -2162,9 +2272,11 @@ ${characterPhysicalAnchorBlock(character)}
 
 ## Output Format (STRICT — Vivid 1)
 
-${outputShapeRule(count, false)}
+${outputShapeRule(count, true)}
 
 ${sceneNameRule(count, existingList)}
+
+${NEGATIVE_PROMPT_RULE}
 
 ### prompt (REQUIRED, string — Vivid 1 photo-editorial prose)
 A **single flowing paragraph** of photographic prose (typically 6-12 comma-separated phrases or 2-4 short sentences). Across the paragraph, cover (in whatever order reads best for the scene):
@@ -2262,13 +2374,6 @@ Reference example (Format B — do NOT copy literally, adapt to each scene):
 
 Notice: Format B reintroduces the physical descriptions of BOTH subjects explicitly because ourdream cannot auto-prepend two characters. The female block always carries \`score_9,score_8_up,score_7_up,\` boosters. The key pose for each subject is wrapped in \`((...))\` for emphasis.
 
-### negativePrompt (REQUIRED, string — tag style, applies to both formats)
-A comma-separated list of **8 to 15 short tags** describing what the image must AVOID. Combine generic quality-artifact tags with a few scene-specific exclusions that make sense for the setting/pose.
-
-Generic quality tags to include most of the time (pick 4-6): \`blurry, low quality, deformed hands, extra fingers, extra limbs, bad anatomy, watermark, text, cropped, jpeg artifacts, out of frame, disfigured\`.
-
-Scene-specific exclusions should rule out elements the positive prompt does NOT want (e.g. for an outdoor beach scene: \`indoor, rain, crowd\`; for a nude pose: \`heavy clothing, winter jacket\`; for a close-up: \`wide shot, distant camera\`).
-
-Never leave \`negativePrompt\` empty or as a single word.
+${NEGATIVE_PROMPT_RULE}
 ${EMPHASIS_SYNTAX_BLOCK}`;
 }
