@@ -12,6 +12,7 @@ import {
 	RefreshCw,
 	Search,
 	Settings2,
+	Sparkles,
 	Trash2,
 } from "lucide-react";
 import { nanoid } from "nanoid";
@@ -106,6 +107,9 @@ export function CharacterDetailPage({ id }: { id: string }) {
 	const [moodAxesBusy, setMoodAxesBusy] = useState(false);
 	const [moodAxesError, setMoodAxesError] = useState<string | null>(null);
 	const [exportBusy, setExportBusy] = useState(false);
+	const [upgradeOpen, setUpgradeOpen] = useState(false);
+	const [upgradeBusy, setUpgradeBusy] = useState(false);
+	const [upgradeError, setUpgradeError] = useState<string | null>(null);
 	const toast = useToast();
 
 	useEffect(() => {
@@ -242,6 +246,28 @@ export function CharacterDetailPage({ id }: { id: string }) {
 		}
 	}, [data]);
 
+	const handleUpgradeSystemFramework = useCallback(async () => {
+		if (!data) return;
+		setUpgradeBusy(true);
+		setUpgradeError(null);
+		const res = await window.api.characters.upgradeSystemFramework(
+			data.id,
+			synthGatheringSummary(data),
+		);
+		setUpgradeBusy(false);
+		if (res.success) {
+			setData(res.stored);
+			setUpgradeOpen(false);
+			toast.push({
+				tone: "success",
+				title: "Framework upgraded",
+				description: `${res.stored.character.firstName}'s behavioral system is now on the latest spec.`,
+			});
+		} else {
+			setUpgradeError(res.error);
+		}
+	}, [data, toast]);
+
 	if (notFound) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6">
@@ -290,6 +316,10 @@ export function CharacterDetailPage({ id }: { id: string }) {
 			onQuickEdit={() => setQuickEditOpen(true)}
 			onRegenerate={() => setRegenerateOpen(true)}
 			onRegenerateMoodAxes={() => void handleRegenerateMoodAxes()}
+			onUpgradeFramework={() => {
+				setUpgradeError(null);
+				setUpgradeOpen(true);
+			}}
 		/>
 	);
 
@@ -354,6 +384,54 @@ export function CharacterDetailPage({ id }: { id: string }) {
 				onUpdated={setData}
 				open={ourdreamOpen}
 			/>
+
+			<Dialog
+				onOpenChange={(o) => {
+					if (upgradeBusy) return;
+					setUpgradeOpen(o);
+					if (!o) setUpgradeError(null);
+				}}
+				open={upgradeOpen}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<span className="eyebrow text-primary/85">Framework upgrade</span>
+						<DialogTitle className="-tracking-[0.015em] font-semibold text-[1.25rem] text-foreground leading-tight">
+							Refresh {data.character.firstName}'s behavioral system?
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription className="max-w-[52ch] text-[0.875rem] text-muted-foreground leading-relaxed">
+						This rewrites only the framework scaffolding inside the scenario
+						(Hidden Trust System, Scene Progression, Wardrobe State, Format
+						Rules) and migrates the greeting header to the latest bracket
+						format. The narrative, romance pacing, trust behaviors, physical
+						details, personality, and visual fields stay untouched. Mood axes
+						are preserved unless they need to be swapped to follow the new
+						intrinsic / relational convention.
+					</DialogDescription>
+					{upgradeError && (
+						<div className="rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs ring-1 ring-destructive/30">
+							{upgradeError}
+						</div>
+					)}
+					<DialogFooter>
+						<Button
+							disabled={upgradeBusy}
+							onClick={() => setUpgradeOpen(false)}
+							variant="outline"
+						>
+							Cancel
+						</Button>
+						<Button
+							disabled={upgradeBusy}
+							onClick={() => void handleUpgradeSystemFramework()}
+						>
+							<Sparkles className="h-3.5 w-3.5" />
+							{upgradeBusy ? "Upgrading…" : "Upgrade now"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			<Dialog onOpenChange={setDeleteOpen} open={deleteOpen}>
 				<DialogContent className="sm:max-w-md">
@@ -454,6 +532,7 @@ function ActionToolbar({
 	onQuickEdit,
 	onRegenerate,
 	onRegenerateMoodAxes,
+	onUpgradeFramework,
 }: {
 	data: StoredCharacter;
 	exportBusy: boolean;
@@ -467,6 +546,7 @@ function ActionToolbar({
 	onQuickEdit: () => void;
 	onRegenerate: () => void;
 	onRegenerateMoodAxes: () => void;
+	onUpgradeFramework: () => void;
 }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1.5">
@@ -537,6 +617,14 @@ function ActionToolbar({
 									onClick={() => {
 										onMoreOpenChange(false);
 										onEditOurdream();
+									}}
+								/>
+								<MenuItem
+									icon={<Sparkles className="h-3.5 w-3.5" />}
+									label="Upgrade to latest framework"
+									onClick={() => {
+										onMoreOpenChange(false);
+										onUpgradeFramework();
 									}}
 								/>
 								{!data.character.moodAxes && (

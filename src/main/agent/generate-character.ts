@@ -8,6 +8,7 @@ import {
   buildPersonalityDetailsPrompt,
   buildProfileInferencePrompt,
   buildScenarioPrompt,
+  buildSystemFrameworkUpgradePrompt,
 } from "@shared/prompts";
 import {
   CHARACTER_STEP_IDS,
@@ -31,6 +32,8 @@ import {
   type MessageLength,
   personalityOnlySchema,
   scenarioOnlySchema,
+  type SystemFrameworkUpgrade,
+  systemFrameworkUpgradeSchema,
 } from "@shared/schemas";
 import type { GenerateProgressEvent, StepResult, StepUsage } from "@shared/generate";
 import { ClaudeAuthError, type ClaudeModel, type ClaudeRunResult, runClaude } from "../claude/runner";
@@ -445,6 +448,169 @@ export async function generateCharacterStep<T = unknown>(
     success: false,
     error: first.error,
     usage: first.usage,
+    adminOverrideApplied: superAdmin,
+  };
+}
+
+export interface UpgradeSystemFrameworkInput {
+  runId: string;
+  character: Character;
+  difficulty: Difficulty;
+  messageLength?: MessageLength;
+  generationModel?: GenerationModel;
+  gatheringSummary?: string;
+  superAdmin: boolean;
+  onEvent?: (event: GenerateProgressEvent) => void;
+}
+
+export async function upgradeSystemFramework(
+  input: UpgradeSystemFrameworkInput
+): Promise<StepResult<SystemFrameworkUpgrade>> {
+  const {
+    runId,
+    character,
+    difficulty,
+    superAdmin,
+    onEvent,
+    gatheringSummary,
+  } = input;
+  const messageLength = input.messageLength ?? DEFAULT_MESSAGE_LENGTH;
+  const generationModel: ClaudeModel =
+    input.generationModel ?? DEFAULT_GENERATION_MODEL;
+
+  onEvent?.({ runId, kind: "character", step: "scenario", status: "started" });
+
+  const baseSystem = buildSystemFrameworkUpgradePrompt(difficulty, messageLength);
+  const systemPrompt = applySuperAdminOverride(baseSystem, superAdmin);
+
+  const moodAxesJson = JSON.stringify(character.moodAxes, null, 2);
+  const userParts: string[] = [
+    "Here is the EXISTING character to upgrade. Preserve everything per the system prompt rules; refresh only the framework scaffolding inside scenario and migrate the greetingMessage metadata header if needed.",
+    "",
+    `<existing_character>`,
+    `  <difficulty>${difficulty}</difficulty>`,
+    `  <messageLength>${messageLength}</messageLength>`,
+    `  <scenario>`,
+    character.scenario,
+    `  </scenario>`,
+    `  <greetingMessage>`,
+    character.greetingMessage,
+    `  </greetingMessage>`,
+    `  <moodAxes>`,
+    moodAxesJson,
+    `  </moodAxes>`,
+  ];
+  if (gatheringSummary && gatheringSummary.trim().length > 0) {
+    userParts.push(
+      `  <gatheringSummaryForContext>`,
+      gatheringSummary,
+      `  </gatheringSummaryForContext>`
+    );
+  }
+  userParts.push(`</existing_character>`);
+  userParts.push("");
+  userParts.push(
+    "Produce structured JSON with exactly the three fields: scenario, greetingMessage, moodAxes. Do not output any other field."
+  );
+  const userMessage = userParts.join("\n");
+
+  const jsonSchema = z.toJSONSchema(systemFrameworkUpgradeSchema);
+  const startedAt = Date.now();
+
+  let result: ClaudeRunResult;
+  try {
+    result = await runClaude({
+      model: generationModel,
+      systemPrompt,
+      userMessage,
+      jsonSchema,
+      stepLabel: "scenario",
+    });
+  } catch (err) {
+    const isAuth = err instanceof ClaudeAuthError;
+    const prefix = isAuth
+      ? `[upgrade-system-framework] AUTH: `
+      : `[upgrade-system-framework] runClaude threw: `;
+    console.error("[upgrade-system-framework:exception]", {
+      isAuth,
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "scenario",
+      status: "failed",
+      error: prefix + String(err),
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: prefix + String(err),
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  const usage = extractUsage(generationModel, result, startedAt);
+
+  if (!result.success || !result.structuredOutput) {
+    const text = `${result.error ?? ""} ${result.finalAssistantText ?? ""}`;
+    const refusal = REFUSAL_PATTERN.test(text);
+    const details =
+      result.error ??
+      (result.finalAssistantText
+        ? `no structured output — assistant said: ${result.finalAssistantText.slice(0, 500)}`
+        : undefined) ??
+      "upgrade failed with no details (check main process logs)";
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "scenario",
+      status: "failed",
+      error: `[upgrade-system-framework] ${details}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: `[upgrade-system-framework] ${details}`,
+      refusal,
+      usage,
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  const parsed = systemFrameworkUpgradeSchema.safeParse(result.structuredOutput);
+  if (!parsed.success) {
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "scenario",
+      status: "failed",
+      error: `[upgrade-system-framework] schema validation failed: ${parsed.error.message}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: `[upgrade-system-framework] schema validation failed: ${parsed.error.message}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  onEvent?.({
+    runId,
+    kind: "character",
+    step: "scenario",
+    status: "succeeded",
+    usage,
+    adminOverrideApplied: superAdmin,
+  });
+  return {
+    success: true,
+    data: parsed.data,
+    usage,
     adminOverrideApplied: superAdmin,
   };
 }

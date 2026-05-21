@@ -141,6 +141,17 @@ const api = {
         id,
         gatheringSummary,
       }),
+    upgradeSystemFramework: (
+      id: string,
+      gatheringSummary?: string
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("characters:upgradeSystemFramework", {
+        id,
+        gatheringSummary,
+      }),
     regenerateForDifficulty: (
       id: string,
       difficulty: Difficulty,

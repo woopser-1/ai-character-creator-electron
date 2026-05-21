@@ -617,6 +617,15 @@ export const extraDetailsOnlySchema = characterSchema.pick({
 });
 export type ExtraDetailsOnly = z.infer<typeof extraDetailsOnlySchema>;
 
+export const systemFrameworkUpgradeSchema = characterSchema
+	.pick({ scenario: true, greetingMessage: true })
+	.extend({
+		moodAxes: moodAxesSchema.describe(
+			"The upgraded moodAxes — preserved verbatim if the existing primary is intrinsic and secondary is relational, otherwise swapped/adjusted per the intrinsic/relational convention.",
+		),
+	});
+export type SystemFrameworkUpgrade = z.infer<typeof systemFrameworkUpgradeSchema>;
+
 export const characterLightSchema = characterSchema
 	.pick({
 		firstName: true,

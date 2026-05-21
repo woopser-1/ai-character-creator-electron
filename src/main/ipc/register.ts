@@ -40,6 +40,7 @@ import {
   generateCharacterStep,
   inferMeasurements,
   inferProfile,
+  upgradeSystemFramework,
 } from "../agent/generate-character";
 import { generateScenes, generateSingleScene } from "../agent/generate-scenes";
 import {
@@ -842,6 +843,48 @@ export function registerIpc(window: BrowserWindow): void {
       }
       const updated = await updateCharacter(payload.id, {
         character: { ...existing.character, moodAxes: parsed.data.moodAxes },
+      });
+      return { success: true as const, stored: updated };
+    }
+  );
+
+  ipcMain.handle(
+    "characters:upgradeSystemFramework",
+    async (
+      _event,
+      payload: { id: string; gatheringSummary?: string }
+    ) => {
+      const existing = await getCharacter(payload.id);
+      if (!existing) {
+        return {
+          success: false as const,
+          error: `Character ${payload.id} not found`,
+        };
+      }
+      const settings = await getSettings();
+      const result = await upgradeSystemFramework({
+        runId: nanoid(),
+        character: existing.character,
+        difficulty: existing.difficulty,
+        messageLength: existing.messageLength ?? DEFAULT_MESSAGE_LENGTH,
+        generationModel: settings.generationModel,
+        gatheringSummary: payload.gatheringSummary,
+        superAdmin: settings.superAdmin,
+        onEvent: emitProgress,
+      });
+      if (!result.success) {
+        return {
+          success: false as const,
+          error: result.error ?? "system framework upgrade failed",
+        };
+      }
+      const updated = await updateCharacter(payload.id, {
+        character: {
+          ...existing.character,
+          scenario: result.data.scenario,
+          greetingMessage: result.data.greetingMessage,
+          moodAxes: result.data.moodAxes,
+        },
       });
       return { success: true as const, stored: updated };
     }
