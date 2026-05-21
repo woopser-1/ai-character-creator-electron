@@ -34,6 +34,8 @@ import {
   scenarioOnlySchema,
   type SystemFrameworkUpgrade,
   systemFrameworkUpgradeSchema,
+  type Vivid3PhysicalRefresh,
+  vivid3PhysicalRefreshSchema,
 } from "@shared/schemas";
 import type { GenerateProgressEvent, StepResult, StepUsage } from "@shared/generate";
 import { ClaudeAuthError, type ClaudeModel, type ClaudeRunResult, runClaude } from "../claude/runner";
@@ -603,6 +605,171 @@ export async function upgradeSystemFramework(
     runId,
     kind: "character",
     step: "scenario",
+    status: "succeeded",
+    usage,
+    adminOverrideApplied: superAdmin,
+  });
+  return {
+    success: true,
+    data: parsed.data,
+    usage,
+    adminOverrideApplied: superAdmin,
+  };
+}
+
+export interface RefreshVivid3PhysicalInput {
+  runId: string;
+  character: Character;
+  generationModel?: GenerationModel;
+  gatheringSummary?: string;
+  superAdmin: boolean;
+  onEvent?: (event: GenerateProgressEvent) => void;
+}
+
+export async function refreshVivid3Physical(
+  input: RefreshVivid3PhysicalInput
+): Promise<StepResult<Vivid3PhysicalRefresh>> {
+  const { runId, character, superAdmin, onEvent, gatheringSummary } = input;
+  const generationModel: ClaudeModel =
+    input.generationModel ?? DEFAULT_GENERATION_MODEL;
+
+  onEvent?.({ runId, kind: "character", step: "visual", status: "started" });
+
+  const baseSystem = buildCharacterVisualPromptHaiku("Vivid 3");
+  const systemPrompt = applySuperAdminOverride(baseSystem, superAdmin);
+
+  const ourDreamFieldsJson = character.ourDreamFields
+    ? JSON.stringify(character.ourDreamFields, null, 2)
+    : "(none — previous generation did not populate ourDreamFields)";
+
+  const userParts: string[] = [
+    "Here is the EXISTING Vivid 3 character whose physical fields need to be refreshed to the latest gold-standard format.",
+    "",
+    "Refresh ONLY the five visual fields: customPhysicalDetails, customFaceDetails, baseGenerationPrompt, baseImagePrompt, and ourDreamFields. Preserve the same identity — same name, same age, same ethnicity, same body type, same hair colour, same eye colour, same distinguishing features (tattoos, piercings, freckles) — but rewrite them to strictly follow the Vivid 3 system-prompt rules above (atomic-assembly opener, prose-rich ourDreamFields, single-parens underscore-glued hairStyle tags, single flowing customFaceDetails paragraph covering all 9 face axes, one-flowing-sentence customPhysicalDetails body-proportion summary).",
+    "",
+    `<existing_character>`,
+    `  <firstName>${character.firstName}</firstName>`,
+    `  <lastName>${character.lastName}</lastName>`,
+    `  <age>${character.age}</age>`,
+    `  <customPhysicalDetails>`,
+    character.customPhysicalDetails,
+    `  </customPhysicalDetails>`,
+    `  <customFaceDetails>`,
+    character.customFaceDetails,
+    `  </customFaceDetails>`,
+    `  <baseGenerationPrompt>`,
+    character.baseGenerationPrompt,
+    `  </baseGenerationPrompt>`,
+    `  <baseImagePrompt>`,
+    character.baseImagePrompt,
+    `  </baseImagePrompt>`,
+    `  <ourDreamFields>`,
+    ourDreamFieldsJson,
+    `  </ourDreamFields>`,
+  ];
+  if (gatheringSummary && gatheringSummary.trim().length > 0) {
+    userParts.push(
+      `  <gatheringSummaryForContext>`,
+      gatheringSummary,
+      `  </gatheringSummaryForContext>`
+    );
+  }
+  userParts.push(`</existing_character>`);
+  userParts.push("");
+  userParts.push(
+    "Produce structured JSON with exactly these five fields: customPhysicalDetails, customFaceDetails, baseGenerationPrompt, baseImagePrompt, ourDreamFields. Do not output age, name, scenario, personality, or any other field. The character's identity must remain the same person — only the prose format and atomic-field richness changes."
+  );
+  const userMessage = userParts.join("\n");
+
+  const jsonSchema = z.toJSONSchema(vivid3PhysicalRefreshSchema);
+  const startedAt = Date.now();
+
+  let result: ClaudeRunResult;
+  try {
+    result = await runClaude({
+      model: generationModel,
+      systemPrompt,
+      userMessage,
+      jsonSchema,
+      stepLabel: "visual",
+    });
+  } catch (err) {
+    const isAuth = err instanceof ClaudeAuthError;
+    const prefix = isAuth
+      ? `[refresh-vivid3-physical] AUTH: `
+      : `[refresh-vivid3-physical] runClaude threw: `;
+    console.error("[refresh-vivid3-physical:exception]", {
+      isAuth,
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "visual",
+      status: "failed",
+      error: prefix + String(err),
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: prefix + String(err),
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  const usage = extractUsage(generationModel, result, startedAt);
+
+  if (!result.success || !result.structuredOutput) {
+    const text = `${result.error ?? ""} ${result.finalAssistantText ?? ""}`;
+    const refusal = REFUSAL_PATTERN.test(text);
+    const details =
+      result.error ??
+      (result.finalAssistantText
+        ? `no structured output — assistant said: ${result.finalAssistantText.slice(0, 500)}`
+        : undefined) ??
+      "refresh failed with no details (check main process logs)";
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "visual",
+      status: "failed",
+      error: `[refresh-vivid3-physical] ${details}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: `[refresh-vivid3-physical] ${details}`,
+      refusal,
+      usage,
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  const parsed = vivid3PhysicalRefreshSchema.safeParse(result.structuredOutput);
+  if (!parsed.success) {
+    onEvent?.({
+      runId,
+      kind: "character",
+      step: "visual",
+      status: "failed",
+      error: `[refresh-vivid3-physical] schema validation failed: ${parsed.error.message}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    });
+    return {
+      success: false,
+      error: `[refresh-vivid3-physical] schema validation failed: ${parsed.error.message}`,
+      usage,
+      adminOverrideApplied: superAdmin,
+    };
+  }
+
+  onEvent?.({
+    runId,
+    kind: "character",
+    step: "visual",
     status: "succeeded",
     usage,
     adminOverrideApplied: superAdmin,

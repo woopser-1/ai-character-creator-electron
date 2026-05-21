@@ -7,6 +7,7 @@ import {
 	Gauge,
 	ImagePlus,
 	Link as LinkIcon,
+	Loader2,
 	MessageCircle,
 	MoreHorizontal,
 	RefreshCw,
@@ -46,7 +47,7 @@ import {
 	setReplaySeed,
 } from "@/lib/gathering-replay";
 import { navigate } from "@/lib/router";
-import type { StoredCharacter } from "@/lib/types";
+import { getStoredImageModel, type StoredCharacter } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function synthGatheringSummary(data: StoredCharacter): string {
@@ -110,6 +111,11 @@ export function CharacterDetailPage({ id }: { id: string }) {
 	const [upgradeOpen, setUpgradeOpen] = useState(false);
 	const [upgradeBusy, setUpgradeBusy] = useState(false);
 	const [upgradeError, setUpgradeError] = useState<string | null>(null);
+	const [refreshVisualsOpen, setRefreshVisualsOpen] = useState(false);
+	const [refreshVisualsBusy, setRefreshVisualsBusy] = useState(false);
+	const [refreshVisualsError, setRefreshVisualsError] = useState<string | null>(
+		null,
+	);
 	const toast = useToast();
 
 	useEffect(() => {
@@ -268,6 +274,28 @@ export function CharacterDetailPage({ id }: { id: string }) {
 		}
 	}, [data, toast]);
 
+	const handleRefreshVivid3Physical = useCallback(async () => {
+		if (!data) return;
+		setRefreshVisualsBusy(true);
+		setRefreshVisualsError(null);
+		const res = await window.api.characters.refreshVivid3Physical(
+			data.id,
+			synthGatheringSummary(data),
+		);
+		setRefreshVisualsBusy(false);
+		if (res.success) {
+			setData(res.stored);
+			setRefreshVisualsOpen(false);
+			toast.push({
+				tone: "success",
+				title: "Physical fields refreshed",
+				description: `${res.stored.character.firstName}'s Vivid 3 visual prompts are now on the gold-standard format.`,
+			});
+		} else {
+			setRefreshVisualsError(res.error);
+		}
+	}, [data, toast]);
+
 	if (notFound) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6">
@@ -314,12 +342,17 @@ export function CharacterDetailPage({ id }: { id: string }) {
 			onExport={() => void handleExport()}
 			onMoreOpenChange={setMoreOpen}
 			onQuickEdit={() => setQuickEditOpen(true)}
+			onRefreshVivid3Physical={() => {
+				setRefreshVisualsError(null);
+				setRefreshVisualsOpen(true);
+			}}
 			onRegenerate={() => setRegenerateOpen(true)}
 			onRegenerateMoodAxes={() => void handleRegenerateMoodAxes()}
 			onUpgradeFramework={() => {
 				setUpgradeError(null);
 				setUpgradeOpen(true);
 			}}
+			refreshVisualsBusy={refreshVisualsBusy}
 		/>
 	);
 
@@ -341,6 +374,7 @@ export function CharacterDetailPage({ id }: { id: string }) {
 					<CharacterReview
 						actions={actions}
 						data={data}
+						onCharacterUpdated={setData}
 						onRefineScene={(idx) => setRefineSceneIndex(idx)}
 						onRewindFromMessage={handleRewindFromMessage}
 					/>
@@ -428,6 +462,60 @@ export function CharacterDetailPage({ id }: { id: string }) {
 						>
 							<Sparkles className="h-3.5 w-3.5" />
 							{upgradeBusy ? "Upgrading…" : "Upgrade now"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				onOpenChange={(o) => {
+					if (refreshVisualsBusy) return;
+					setRefreshVisualsOpen(o);
+					if (!o) setRefreshVisualsError(null);
+				}}
+				open={refreshVisualsOpen}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<span className="eyebrow text-primary/85">Vivid 3 visuals</span>
+						<DialogTitle className="-tracking-[0.015em] font-semibold text-[1.25rem] text-foreground leading-tight">
+							Refresh {data.character.firstName}'s physical prompts?
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription className="max-w-[52ch] text-[0.875rem] text-muted-foreground leading-relaxed">
+						This rewrites the five Vivid 3 visual fields (customPhysicalDetails,
+						customFaceDetails, baseGenerationPrompt, baseImagePrompt, and the 9
+						atomic OurDream fields) to the latest gold-standard format —
+						atomic-assembly opener, prose-rich axes (skinColor with tone +
+						finish, breastSize with size + shape + lift, etc.), and
+						single-parens underscore-glued hairStyle tags. Identity stays the
+						same — same name, age, ethnicity, body type, hair colour, and
+						distinguishing features. Scenario, personality, mood axes, and
+						scenes are untouched.
+					</DialogDescription>
+					{refreshVisualsError && (
+						<div className="rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs ring-1 ring-destructive/30">
+							{refreshVisualsError}
+						</div>
+					)}
+					<DialogFooter>
+						<Button
+							disabled={refreshVisualsBusy}
+							onClick={() => setRefreshVisualsOpen(false)}
+							variant="outline"
+						>
+							Cancel
+						</Button>
+						<Button
+							disabled={refreshVisualsBusy}
+							onClick={() => void handleRefreshVivid3Physical()}
+						>
+							{refreshVisualsBusy ? (
+								<Loader2 className="h-3.5 w-3.5 animate-spin" />
+							) : (
+								<Sparkles className="h-3.5 w-3.5" />
+							)}
+							{refreshVisualsBusy ? "Refreshing…" : "Refresh now"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -530,9 +618,11 @@ function ActionToolbar({
 	onExport,
 	onMoreOpenChange,
 	onQuickEdit,
+	onRefreshVivid3Physical,
 	onRegenerate,
 	onRegenerateMoodAxes,
 	onUpgradeFramework,
+	refreshVisualsBusy,
 }: {
 	data: StoredCharacter;
 	exportBusy: boolean;
@@ -544,10 +634,13 @@ function ActionToolbar({
 	onExport: () => void;
 	onMoreOpenChange: (v: boolean) => void;
 	onQuickEdit: () => void;
+	onRefreshVivid3Physical: () => void;
 	onRegenerate: () => void;
 	onRegenerateMoodAxes: () => void;
 	onUpgradeFramework: () => void;
+	refreshVisualsBusy: boolean;
 }) {
+	const isVivid3 = getStoredImageModel(data) === "Vivid 3";
 	return (
 		<div className="flex flex-wrap items-center gap-1.5">
 			<Tooltip>
@@ -627,6 +720,27 @@ function ActionToolbar({
 										onUpgradeFramework();
 									}}
 								/>
+								{isVivid3 && (
+									<MenuItem
+										disabled={refreshVisualsBusy}
+										icon={
+											refreshVisualsBusy ? (
+												<Loader2 className="h-3.5 w-3.5 animate-spin" />
+											) : (
+												<Sparkles className="h-3.5 w-3.5" />
+											)
+										}
+										label={
+											refreshVisualsBusy
+												? "Refreshing…"
+												: "Refresh Vivid 3 physical fields"
+										}
+										onClick={() => {
+											onMoreOpenChange(false);
+											onRefreshVivid3Physical();
+										}}
+									/>
+								)}
 								{!data.character.moodAxes && (
 									<MenuItem
 										disabled={moodAxesBusy}

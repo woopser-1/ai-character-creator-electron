@@ -152,6 +152,45 @@ const api = {
         id,
         gatheringSummary,
       }),
+    refreshVivid3Physical: (
+      id: string,
+      gatheringSummary?: string
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("characters:refreshVivid3Physical", {
+        id,
+        gatheringSummary,
+      }),
+    updateCharacterField: (
+      id: string,
+      path: string,
+      value: string
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("characters:updateCharacterField", {
+        id,
+        path,
+        value,
+      }),
+    updateSceneField: (
+      id: string,
+      sceneIndex: number,
+      field: "prompt" | "negativePrompt",
+      value: string
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("characters:updateSceneField", {
+        id,
+        sceneIndex,
+        field,
+        value,
+      }),
     regenerateForDifficulty: (
       id: string,
       difficulty: Difficulty,

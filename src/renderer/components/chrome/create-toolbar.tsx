@@ -119,7 +119,7 @@ function ConsoleStepper({
 						<motion.div
 							animate={{ opacity: 1, y: 0 }}
 							className={cn(
-								"relative inline-flex min-w-0 items-baseline gap-2",
+								"relative inline-flex min-w-0 items-center gap-2",
 								done && "text-foreground/65",
 								active && "text-foreground",
 								!done && !active && "text-foreground/35",
@@ -129,7 +129,7 @@ function ConsoleStepper({
 						>
 							<span
 								className={cn(
-									"relative inline-flex h-5 w-5 shrink-0 translate-y-[1px] items-center justify-center rounded-full",
+									"relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
 									done && "bg-primary/15 text-primary",
 									active && "text-primary",
 								)}
@@ -175,7 +175,7 @@ function ConsoleStepper({
 								{step.label}
 							</span>
 							{active && status && (
-								<span className="ml-2 hidden min-w-0 items-baseline @[32rem]/toolbar:flex">
+								<span className="ml-2 hidden min-w-0 items-center @[32rem]/toolbar:flex">
 									<span
 										aria-hidden
 										className="mr-2 inline-block h-1 w-1 shrink-0 rounded-full bg-foreground/25"

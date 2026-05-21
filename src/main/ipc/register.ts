@@ -27,7 +27,11 @@ import type {
   Scene,
   StoredCharacter,
 } from "@shared/schemas";
-import { DEFAULT_IMAGE_MODEL, DEFAULT_MESSAGE_LENGTH } from "@shared/schemas";
+import {
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_MESSAGE_LENGTH,
+  getStoredImageModel,
+} from "@shared/schemas";
 import type {
   GenerateCharacterAllResponse,
   GenerateCharacterStepResponse,
@@ -40,6 +44,7 @@ import {
   generateCharacterStep,
   inferMeasurements,
   inferProfile,
+  refreshVivid3Physical,
   upgradeSystemFramework,
 } from "../agent/generate-character";
 import { generateScenes, generateSingleScene } from "../agent/generate-scenes";
@@ -444,6 +449,137 @@ export function registerIpc(window: BrowserWindow): void {
     async (_event, payload: { id: string; scenes: Scene[] }) => {
       await updateCharacterScenes(payload.id, payload.scenes);
       return getCharacter(payload.id);
+    }
+  );
+
+  ipcMain.handle(
+    "characters:updateCharacterField",
+    async (
+      _event,
+      payload: { id: string; path: string; value: string }
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > => {
+      const EDITABLE_PATHS = new Set<string>([
+        "customPhysicalDetails",
+        "customFaceDetails",
+        "baseGenerationPrompt",
+        "baseImagePrompt",
+        "scenario",
+        "greetingMessage",
+        "firstReplySuggestion",
+        "additionalPersonalityDetails",
+        "extraDetails",
+        "publicDescription",
+        "personalityLabel",
+        "occupationLabel",
+        "relationshipLabel",
+        "hobbyLabel",
+        "fetishLabel",
+        "ourDreamFields.hairStyle",
+        "ourDreamFields.hairColor",
+        "ourDreamFields.bodyType",
+        "ourDreamFields.ethnicity",
+        "ourDreamFields.skinColor",
+        "ourDreamFields.breastSize",
+        "ourDreamFields.buttSize",
+        "ourDreamFields.eyeColor",
+        "intimacyProfile.circumstantialTriggers",
+      ]);
+      if (!EDITABLE_PATHS.has(payload.path)) {
+        return {
+          success: false,
+          error: `Path "${payload.path}" is not editable`,
+        };
+      }
+      if (payload.value.trim().length === 0) {
+        return { success: false, error: "Value cannot be empty" };
+      }
+      const existing = await getCharacter(payload.id);
+      if (!existing) {
+        return { success: false, error: `Character ${payload.id} not found` };
+      }
+      const segments = payload.path.split(".");
+      const nextCharacter: Character = JSON.parse(
+        JSON.stringify(existing.character)
+      );
+      // Walk segments, but only one level of nesting is whitelisted.
+      if (segments.length === 1) {
+        (nextCharacter as Record<string, unknown>)[segments[0]] = payload.value;
+      } else if (segments.length === 2) {
+        const [parent, child] = segments;
+        const parentObj = (nextCharacter as Record<string, unknown>)[parent];
+        if (parentObj === undefined || parentObj === null) {
+          return {
+            success: false,
+            error: `Parent "${parent}" missing on character`,
+          };
+        }
+        (parentObj as Record<string, unknown>)[child] = payload.value;
+      }
+      const { characterSchema } = await import("@shared/schemas");
+      const parsed = characterSchema.safeParse(nextCharacter);
+      if (!parsed.success) {
+        return {
+          success: false,
+          error: `Validation failed: ${parsed.error.message}`,
+        };
+      }
+      const updated = await updateCharacter(payload.id, {
+        character: parsed.data,
+      });
+      return { success: true, stored: updated };
+    }
+  );
+
+  ipcMain.handle(
+    "characters:updateSceneField",
+    async (
+      _event,
+      payload: {
+        id: string;
+        sceneIndex: number;
+        field: "prompt" | "negativePrompt";
+        value: string;
+      }
+    ): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > => {
+      const existing = await getCharacter(payload.id);
+      if (!existing) {
+        return { success: false, error: `Character ${payload.id} not found` };
+      }
+      if (
+        payload.sceneIndex < 0 ||
+        payload.sceneIndex >= existing.scenes.length
+      ) {
+        return {
+          success: false,
+          error: `Scene index ${payload.sceneIndex} out of range`,
+        };
+      }
+      if (
+        payload.field === "prompt" &&
+        payload.value.trim().length === 0
+      ) {
+        return { success: false, error: "Scene prompt cannot be empty" };
+      }
+      const nextScenes: Scene[] = existing.scenes.map((scene, idx) =>
+        idx === payload.sceneIndex
+          ? { ...scene, [payload.field]: payload.value }
+          : scene
+      );
+      await updateCharacterScenes(payload.id, nextScenes);
+      const updated = await getCharacter(payload.id);
+      if (!updated) {
+        return {
+          success: false,
+          error: "Character disappeared after update",
+        };
+      }
+      return { success: true, stored: updated };
     }
   );
 
@@ -884,6 +1020,55 @@ export function registerIpc(window: BrowserWindow): void {
           scenario: result.data.scenario,
           greetingMessage: result.data.greetingMessage,
           moodAxes: result.data.moodAxes,
+        },
+      });
+      return { success: true as const, stored: updated };
+    }
+  );
+
+  ipcMain.handle(
+    "characters:refreshVivid3Physical",
+    async (
+      _event,
+      payload: { id: string; gatheringSummary?: string }
+    ) => {
+      const existing = await getCharacter(payload.id);
+      if (!existing) {
+        return {
+          success: false as const,
+          error: `Character ${payload.id} not found`,
+        };
+      }
+      const imageModel = getStoredImageModel(existing);
+      if (imageModel !== "Vivid 3") {
+        return {
+          success: false as const,
+          error: `Refresh is only available for Vivid 3 characters (this one uses ${imageModel})`,
+        };
+      }
+      const settings = await getSettings();
+      const result = await refreshVivid3Physical({
+        runId: nanoid(),
+        character: existing.character,
+        generationModel: settings.generationModel,
+        gatheringSummary: payload.gatheringSummary,
+        superAdmin: settings.superAdmin,
+        onEvent: emitProgress,
+      });
+      if (!result.success) {
+        return {
+          success: false as const,
+          error: result.error ?? "Vivid 3 physical refresh failed",
+        };
+      }
+      const updated = await updateCharacter(payload.id, {
+        character: {
+          ...existing.character,
+          customPhysicalDetails: result.data.customPhysicalDetails,
+          customFaceDetails: result.data.customFaceDetails,
+          baseGenerationPrompt: result.data.baseGenerationPrompt,
+          baseImagePrompt: result.data.baseImagePrompt,
+          ourDreamFields: result.data.ourDreamFields,
         },
       });
       return { success: true as const, stored: updated };

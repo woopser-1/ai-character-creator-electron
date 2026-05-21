@@ -2,21 +2,26 @@ import type { UIMessage } from "@shared/chat";
 import {
 	BookOpen,
 	Brain,
+	Check,
 	Eye,
 	Gauge,
 	Heart,
 	Image,
+	Loader2,
 	MessageSquare,
 	MessagesSquare,
 	Palette,
+	Pencil,
 	PenLine,
 	RotateCcw,
 	Shield,
 	Tag,
 	User,
 	Wand2,
+	X,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { CopyButton } from "@/components/copy-button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +59,13 @@ interface CharacterReviewProps {
 		phase: GatheringPhase;
 		messageId: string;
 	}) => void;
+	/**
+	 * Called after an inline field edit persists successfully. The parent should
+	 * replace its character state with the returned StoredCharacter so the
+	 * detail view re-renders with the new value. Omitting this disables inline
+	 * editing for every Field / CollapsibleField in the tree.
+	 */
+	onCharacterUpdated?: (next: StoredCharacter) => void;
 }
 
 interface CharacterIdentityProps {
@@ -90,18 +102,57 @@ function formatLongDate(iso: string | number | Date): string {
 	});
 }
 
+export type FieldSaveResult = { success: true } | { success: false; error: string };
+
 function Field({
 	label,
 	value,
 	icon,
 	mono,
+	onSave,
 }: {
 	label: string;
 	value: string;
 	icon?: React.ReactNode;
 	mono?: boolean;
+	onSave?: (next: string) => Promise<FieldSaveResult>;
 }) {
 	const { copied, copy } = useCopyToClipboard();
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(value);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const startEdit = () => {
+		setDraft(value);
+		setError(null);
+		setEditing(true);
+	};
+	const cancelEdit = () => {
+		setEditing(false);
+		setError(null);
+		setSaving(false);
+	};
+	const submitEdit = async () => {
+		if (!onSave) return;
+		if (draft.trim().length === 0) {
+			setError("Value cannot be empty");
+			return;
+		}
+		if (draft === value) {
+			setEditing(false);
+			return;
+		}
+		setSaving(true);
+		setError(null);
+		const res = await onSave(draft);
+		setSaving(false);
+		if (res.success) {
+			setEditing(false);
+		} else {
+			setError(res.error);
+		}
+	};
 
 	return (
 		<div className="group">
@@ -116,26 +167,145 @@ function Field({
 							</span>
 						)}
 					</div>
-					<CopyButton
-						className="opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100"
-						value={value}
-					/>
+					{!editing && (
+						<div
+							className={cn(
+								"flex items-center gap-1 transition-opacity duration-150 ease-out",
+								"opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+							)}
+						>
+							{onSave && (
+								<button
+									aria-label={`Edit ${label || "value"}`}
+									className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+									onClick={startEdit}
+									type="button"
+								>
+									<Pencil className="h-3 w-3" />
+								</button>
+							)}
+							<CopyButton value={value} />
+						</div>
+					)}
 				</div>
 			)}
-			<button
-				aria-label={`Copy ${label || "value"}`}
+			{editing ? (
+				<EditPanel
+					draft={draft}
+					error={error}
+					mono={mono}
+					onCancel={cancelEdit}
+					onChange={setDraft}
+					onSubmit={() => void submitEdit()}
+					saving={saving}
+				/>
+			) : (
+				<button
+					aria-label={`Copy ${label || "value"}`}
+					className={cn(
+						"block w-full cursor-pointer whitespace-pre-wrap text-left text-sm leading-relaxed outline-none transition-shadow duration-150 ease-out focus-visible:ring-3 focus-visible:ring-primary/40",
+						mono
+							? "rounded-xl bg-muted p-3.5 font-mono text-[12px] text-foreground/90 leading-relaxed ring-1 ring-foreground/10 transition-colors hover:bg-secondary"
+							: "-mx-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted",
+						copied && "ring-1 ring-primary/40",
+					)}
+					onClick={() => void copy(value)}
+					type="button"
+				>
+					{value}
+				</button>
+			)}
+		</div>
+	);
+}
+
+function EditPanel({
+	draft,
+	error,
+	mono,
+	onCancel,
+	onChange,
+	onSubmit,
+	saving,
+}: {
+	draft: string;
+	error: string | null;
+	mono?: boolean;
+	onCancel: () => void;
+	onChange: (next: string) => void;
+	onSubmit: () => void;
+	saving: boolean;
+}) {
+	// Rough line count for sizing — short values get small textareas, long ones grow.
+	const approxRows = Math.min(20, Math.max(3, draft.split("\n").length + 1));
+	return (
+		<div
+			className={cn(
+				"rounded-xl ring-1 ring-primary/30 transition-colors",
+				mono ? "bg-muted" : "bg-background",
+			)}
+		>
+			<textarea
+				autoFocus
 				className={cn(
-					"block w-full cursor-pointer whitespace-pre-wrap text-left text-sm leading-relaxed outline-none transition-shadow duration-150 ease-out focus-visible:ring-3 focus-visible:ring-primary/40",
+					"block w-full resize-y rounded-t-xl bg-transparent p-3.5 text-sm leading-relaxed outline-none",
 					mono
-						? "rounded-xl bg-muted p-3.5 font-mono text-[12px] text-foreground/90 leading-relaxed ring-1 ring-foreground/10 transition-colors hover:bg-secondary"
-						: "-mx-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted",
-					copied && "ring-1 ring-primary/40",
+						? "font-mono text-[12px] text-foreground/90"
+						: "text-foreground",
 				)}
-				onClick={() => void copy(value)}
-				type="button"
-			>
-				{value}
-			</button>
+				disabled={saving}
+				onChange={(e) => onChange(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Escape") {
+						e.preventDefault();
+						onCancel();
+					}
+					if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+						e.preventDefault();
+						onSubmit();
+					}
+				}}
+				rows={approxRows}
+				value={draft}
+			/>
+			<div className="flex items-center justify-between gap-3 border-foreground/10 border-t px-2.5 py-2">
+				<span className="pl-1 text-[11px] text-muted-foreground">
+					{error ? (
+						<span className="text-destructive">{error}</span>
+					) : (
+						<>
+							<kbd className="rounded bg-foreground/8 px-1 py-0.5 font-mono text-[10px]">⌘</kbd>
+							<kbd className="ml-0.5 rounded bg-foreground/8 px-1 py-0.5 font-mono text-[10px]">↵</kbd>
+							<span className="ml-1">save · </span>
+							<kbd className="rounded bg-foreground/8 px-1 py-0.5 font-mono text-[10px]">esc</kbd>
+							<span className="ml-1">cancel</span>
+						</>
+					)}
+				</span>
+				<div className="flex items-center gap-1.5">
+					<Button
+						disabled={saving}
+						onClick={onCancel}
+						size="sm"
+						variant="ghost"
+					>
+						<X className="h-3 w-3" />
+						Cancel
+					</Button>
+					<Button
+						disabled={saving}
+						onClick={onSubmit}
+						size="sm"
+					>
+						{saving ? (
+							<Loader2 className="h-3 w-3 animate-spin" />
+						) : (
+							<Check className="h-3 w-3" />
+						)}
+						{saving ? "Saving…" : "Save"}
+					</Button>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -288,7 +458,13 @@ const OUR_DREAM_PHYSICAL_DISPLAY_ORDER: OurDreamPhysicalKey[] = [
 	"skinColor",
 ];
 
-function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
+function OurDreamFieldsGrid({
+	fields,
+	makeFieldSaver,
+}: {
+	fields: OurDreamFields;
+	makeFieldSaver?: (path: string) => ((value: string) => Promise<FieldSaveResult>) | undefined;
+}) {
 	return (
 		<div className="space-y-4">
 			<div className="eyebrow text-foreground/55">
@@ -300,6 +476,7 @@ function OurDreamFieldsGrid({ fields }: { fields: OurDreamFields }) {
 						key={key}
 						label={OUR_DREAM_FIELD_LABELS[key]}
 						mono
+						onSave={makeFieldSaver?.(`ourDreamFields.${key}`)}
 						value={fields[key]}
 					/>
 				))}
@@ -452,6 +629,7 @@ export function CharacterReview({
 	data,
 	onRefineScene,
 	onRewindFromMessage,
+	onCharacterUpdated,
 }: CharacterReviewProps) {
 	const { character, scenes } = data;
 	const imageModel = getStoredImageModel(data);
@@ -460,6 +638,42 @@ export function CharacterReview({
 		(data.gatheringMessages && data.gatheringMessages.length > 0) ||
 		(data.sceneGatheringMessages && data.sceneGatheringMessages.length > 0) ||
 		!!data.gatheringSummary;
+
+	const makeFieldSaver = (path: string) =>
+		onCharacterUpdated
+			? async (value: string): Promise<FieldSaveResult> => {
+					const res = await window.api.characters.updateCharacterField(
+						data.id,
+						path,
+						value,
+					);
+					if (res.success) {
+						onCharacterUpdated(res.stored);
+						return { success: true };
+					}
+					return { success: false, error: res.error };
+				}
+			: undefined;
+
+	const makeSceneSaver = (
+		sceneIndex: number,
+		field: "prompt" | "negativePrompt",
+	) =>
+		onCharacterUpdated
+			? async (value: string): Promise<FieldSaveResult> => {
+					const res = await window.api.characters.updateSceneField(
+						data.id,
+						sceneIndex,
+						field,
+						value,
+					);
+					if (res.success) {
+						onCharacterUpdated(res.stored);
+						return { success: true };
+					}
+					return { success: false, error: res.error };
+				}
+			: undefined;
 
 	return (
 		<Tabs defaultValue="appearance">
@@ -526,6 +740,7 @@ export function CharacterReview({
 						<Field
 							label="Generation prompt"
 							mono
+							onSave={makeFieldSaver("baseGenerationPrompt")}
 							value={character.baseGenerationPrompt}
 						/>
 					</Section>
@@ -539,6 +754,7 @@ export function CharacterReview({
 						<Field
 							label="Image prompt"
 							mono
+							onSave={makeFieldSaver("baseImagePrompt")}
 							value={character.baseImagePrompt}
 						/>
 					</Section>
@@ -549,7 +765,10 @@ export function CharacterReview({
 							index={4}
 							title="OurDream atomic fields"
 						>
-							<OurDreamFieldsGrid fields={character.ourDreamFields} />
+							<OurDreamFieldsGrid
+								fields={character.ourDreamFields}
+								makeFieldSaver={makeFieldSaver}
+							/>
 						</Section>
 					)}
 
@@ -566,6 +785,7 @@ export function CharacterReview({
 							)}
 							<CollapsibleField
 								label="Body and physical details"
+								onSave={makeFieldSaver("customPhysicalDetails")}
 								value={character.customPhysicalDetails}
 							/>
 						</div>
@@ -578,6 +798,7 @@ export function CharacterReview({
 					>
 						<CollapsibleField
 							label="Face details"
+							onSave={makeFieldSaver("customFaceDetails")}
 							value={character.customFaceDetails}
 						/>
 					</Section>
@@ -591,7 +812,11 @@ export function CharacterReview({
 						index={1}
 						title="Public description"
 					>
-						<CollapsibleField label="" value={character.publicDescription} />
+						<CollapsibleField
+							label=""
+							onSave={makeFieldSaver("publicDescription")}
+							value={character.publicDescription}
+						/>
 					</Section>
 
 					<Section
@@ -600,14 +825,31 @@ export function CharacterReview({
 						title="Labels"
 					>
 						<div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-							<Field label="Personality" value={character.personalityLabel} />
-							<Field label="Occupation" value={character.occupationLabel} />
+							<Field
+								label="Personality"
+								onSave={makeFieldSaver("personalityLabel")}
+								value={character.personalityLabel}
+							/>
+							<Field
+								label="Occupation"
+								onSave={makeFieldSaver("occupationLabel")}
+								value={character.occupationLabel}
+							/>
 							<Field
 								label="Relationship status"
+								onSave={makeFieldSaver("relationshipLabel")}
 								value={character.relationshipLabel}
 							/>
-							<Field label="Hobby" value={character.hobbyLabel} />
-							<Field label="Fetish" value={character.fetishLabel} />
+							<Field
+								label="Hobby"
+								onSave={makeFieldSaver("hobbyLabel")}
+								value={character.hobbyLabel}
+							/>
+							<Field
+								label="Fetish"
+								onSave={makeFieldSaver("fetishLabel")}
+								value={character.fetishLabel}
+							/>
 						</div>
 					</Section>
 
@@ -675,6 +917,7 @@ export function CharacterReview({
 						<Field
 							label="Greeting message"
 							mono
+							onSave={makeFieldSaver("greetingMessage")}
 							value={character.greetingMessage}
 						/>
 					</Section>
@@ -686,6 +929,7 @@ export function CharacterReview({
 					>
 						<CollapsibleField
 							label=""
+							onSave={makeFieldSaver("firstReplySuggestion")}
 							value={character.firstReplySuggestion}
 						/>
 					</Section>
@@ -698,6 +942,7 @@ export function CharacterReview({
 						<CollapsibleField
 							label="Scenario"
 							mono
+							onSave={makeFieldSaver("scenario")}
 							value={character.scenario}
 						/>
 					</Section>
@@ -710,10 +955,12 @@ export function CharacterReview({
 						<div className="space-y-6">
 							<CollapsibleField
 								label="Additional personality details"
+								onSave={makeFieldSaver("additionalPersonalityDetails")}
 								value={character.additionalPersonalityDetails}
 							/>
 							<CollapsibleField
 								label="Extra details"
+								onSave={makeFieldSaver("extraDetails")}
 								value={character.extraDetails}
 							/>
 						</div>
@@ -806,6 +1053,9 @@ export function CharacterReview({
 							</div>
 							<CollapsibleField
 								label="Circumstantial triggers"
+								onSave={makeFieldSaver(
+									"intimacyProfile.circumstantialTriggers",
+								)}
 								value={character.intimacyProfile.circumstantialTriggers}
 							/>
 						</div>
@@ -858,12 +1108,18 @@ export function CharacterReview({
 											)}
 										</header>
 										<div className="space-y-4">
-											<Field label="Prompt" mono value={scene.prompt} />
+											<Field
+												label="Prompt"
+												mono
+												onSave={makeSceneSaver(i, "prompt")}
+												value={scene.prompt}
+											/>
 											{scene.negativePrompt && (
 												<Field
 													icon={<Palette className="h-3 w-3" />}
 													label="Negative prompt"
 													mono
+													onSave={makeSceneSaver(i, "negativePrompt")}
 													value={scene.negativePrompt}
 												/>
 											)}

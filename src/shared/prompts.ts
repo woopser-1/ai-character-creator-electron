@@ -130,7 +130,14 @@ function characterPhysicalAnchorBlock(character: Character): string {
 - breastSize: ${odf.breastSize}
 - buttSize: ${odf.buttSize}
 
-Use these atomic values to build the anchor sentence at the start of every scene prompt. Phrase them naturally — do not output them as a list, weave them into the opening sentence(s).`;
+Use these atomic values to build the anchor sentence at the start of every scene prompt. Phrase them naturally — do not output them as a list, weave them into the opening sentence(s).
+
+## Character distinguishing features (source of truth for tattoos, piercings, freckles, scars, stretch marks, beauty marks, dimples)
+
+The atomic anchor above does NOT carry distinguishing features. To find them, mine the two prose blocks below — every tattoo, piercing, scar, stretch mark, freckle pattern, beauty mark, dimple, and birthmark mentioned here MUST be considered for every scene prompt.
+
+- customPhysicalDetails: ${character.customPhysicalDetails}
+- customFaceDetails: ${character.customFaceDetails}`;
 	}
 	// Backward-compat fallback: legacy characters without atomic fields. Use prose blocks.
 	return `## Character physical anchor (legacy character — atomic fields not available)
@@ -139,7 +146,7 @@ Draw the anchor for each scene from these prose blocks already generated for thi
 - customPhysicalDetails: ${character.customPhysicalDetails}
 - customFaceDetails: ${character.customFaceDetails}
 
-Distil the essentials (age, ethnicity, skin, hair, eyes, body type) into a single opening sentence at the start of each scene prompt.`;
+Distil the essentials (age, ethnicity, skin, hair, eyes, body type) into a single opening sentence at the start of each scene prompt. Every distinguishing feature mentioned above (tattoos, piercings, freckles, scars, stretch marks, beauty marks, dimples) MUST be considered for every scene prompt.`;
 }
 
 const DIFFICULTY_INSTRUCTIONS: Record<Difficulty, string> = {
@@ -1866,37 +1873,57 @@ Work strictly from the visual cues in the gathering summary (body type, ethnicit
 
 ## Output Field Requirements
 
-### customPhysicalDetails (natural prose, 3-6 sentences)
-A flowing prose description of the character's body and overall physical presence. Write it as if introducing the character in a novel — full sentences, no keyword lists. MUST include, woven into the prose:
+### customPhysicalDetails (natural prose, ONE flowing sentence — the body-proportion summary)
 
-- **Body type and build** with concrete proportion words (long slender legs, narrow hips, thigh gap, flat toned stomach, V-taper shoulders, visible collarbone, etc. — match the chosen body type).
-- **Height** (numeric or comparative — "petite at five-foot-one", "tall at 178 cm").
-- **Skin tone AND a texture/finish descriptor** — never just "tan skin". Always pair with a finish word: dewy, matte, sun-kissed glow, golden undertones, porcelain-cool, subtle sheen, ashy-cool, freckled, tan-lined, etc.
-- **Hair** described across five axes in the same sentence: colour, length, texture, movement/face-framing, and current state. Not "long blonde hair" — write "long honey-blonde hair tumbling in loose, voluminous waves past her shoulders, with lighter face-framing strands that catch the light".
-- **A posture / bearing phrase** rooted in her culture or profession: "the lazy, sun-warmed swagger of a beach kid", "the slight gamer-slouch of someone who lives at a monitor", "the upright carriage of a former dancer", "a coiled, athletic readiness". Skip only if no occupation/vibe is established.
-- **Tattoos** — each one named with **anatomical placement + style/subject**: "a black-and-grey floral sleeve wrapping her left forearm with roses and thorns", "a small line-work moth low on her right ribcage". Never just "tattoos" or "covered in tattoos" without specifics.
-- **Piercings** with placement: septum, left nostril, multiple ear lobes/helix, navel, etc.
-- **One or two habitual accessories** that travel with her — not the scene outfit — like a thin gold necklace, a cross pendant, a vintage Cartier watch, a leather choker. Skip if she truly wears nothing personal.
-- **Habitual manicure** when it's a signature (chipped black polish, fresh French tips, short bitten-down nails, glossy nude almond shape). Skip for characters without a nail signature.
+ANCHOR FORMAT — match the rhythm of this gold-standard from production Vivid 3 (1.json):
+
+\`"She is very slim with a lean athletic build, long slender legs with a thigh gap, a toned flat stomach, very slim narrow hips, small skinny rounded perky butt with high lift, and medium firm perky natural breasts proportionate to her slim frame."\`
+
+The sentence enumerates body proportions in this exact order: **build → legs → stomach → hips → butt → breasts**, each carrying one or two adjectives. The closing clause re-asserts proportionality to the chosen body type ("proportionate to her slim frame", "in keeping with her voluptuous figure", etc.).
+
+REQUIRED — write ONE flowing sentence (a second short sentence is allowed only for habitual posture/bearing) that covers, in order:
+- **Build** with one concrete proportion phrase (e.g. "very slim with a lean athletic build", "softly voluptuous with an hourglass figure", "tall and athletic with a V-taper").
+- **Legs** (long slender / toned / thick juicy / shapely / etc.) with a thigh-gap/curve specifier where appropriate.
+- **Stomach** (toned flat / soft / firm with subtle definition / softly rounded).
+- **Hips** with a width/curve adjective consistent with the body type.
+- **Butt** with size + shape + lift descriptor (e.g. "small skinny rounded perky butt with high lift", "full rounded heart-shaped butt with soft curve").
+- **Breasts** with size + shape + firmness descriptor AND the closing proportionality clause ("proportionate to her slim frame" / "in keeping with her curvy figure").
+
+FORBID (anti-patterns drawn from production failure modes):
+- ❌ Multi-paragraph behavioural / lifestyle text. Example of what NOT to do (samples/characters/11.json): \`"5'2 petite hourglass figure — toned legs, perky C-cup breasts, slim waist, round bubble butt. Long wavy hair, big innocent doe eyes ... Secret details: Hidden tattoos ... She is almost always wearing next to nothing at home, claiming it's 'just more comfortable' ..."\`. Tattoos, piercings, accessories, manicure, lifestyle, habits, intimacy preferences — NONE of those belong here. They go in baseGenerationPrompt.
+- ❌ Bracket-label sections. Example of what NOT to do (samples/characters/4.json): \`"[character: Emma, stunning ...] [hair: voluminous ...] [body: slim hourglass ...]"\`. No brackets.
+- ❌ Bullet lists, headers, or comma-separated tag dumps.
 
 CRITICAL — Body proportion consistency: every body part must be anatomically consistent with the chosen body type. A slim character has slim legs, slender arms, a narrow waist, and a flat or small stomach. A curvy character has fuller thighs, wider hips, and a softer midsection. An athletic character has toned legs, defined arms, and a firm core. Never mix incompatible proportions.
 
-Example: "She stands at a slender five-foot-six, with the long-limbed grace of a former dancer — long slender legs with a faint thigh gap, narrow hips, a flat toned stomach, and high softly sloping shoulders. Her skin is a warm olive with a natural dewy finish that turns golden in summer, and her dark chestnut hair tumbles past her shoulders in loose, unstudied waves with lighter face-framing strands. A small line-work moth is inked low on her right ribcage, a delicate silver hoop glints in her left nostril, and she almost always wears the same thin gold chain her grandmother left her. Her nails are kept short and squared with a clean glossy nude finish, and she carries herself with the upright, slightly bookish poise of someone used to libraries."
+✅ Additional example (curvy body): "She has a softly voluptuous hourglass figure, long shapely legs with a smooth inner curve, a soft flat stomach with the faintest natural definition, wide rounded hips, a full rounded heart-shaped butt with a soft natural lift, and large full natural breasts with a subtle teardrop shape, proportionate to her hourglass frame."
 
-### customFaceDetails (natural prose, 2-4 sentences) — densest face description
-A flowing prose description of her face, written as continuous sentences (never comma-separated traits). MUST include, all of them, woven into the prose:
+### customFaceDetails (natural prose, ONE flowing paragraph — the densest face description)
 
-- A named **face shape** (Diamond, Heart, Inverted triangle, Oval, Rectangle, Round, Square, or Triangle).
-- **Midface length** (longer / average / shorter), **cheekbone width** (broad / narrow / soft), **jaw shape** (tapered, wide, square, rounded).
-- **Eyes**: placement (wide-set / close-set / average), shape (almond / round / hooded / upturned / downturned), colour, AND lash + habitual eye makeup treatment — long thick lashes, sparse natural lashes, winged black liner, smudged kohl, clean bare lash line, etc. (do NOT skip the lashes / liner — 5/6 of our reference characters mention this explicitly).
-- **Eyebrows**: weight (thick / heavy / softly arched / thin / over-plucked) AND shade relative to hair colour. Thick brows are a signature feature in many strong characters — name them clearly when they apply.
-- **Nose**: bridge (hooked / straight / upturned / prominent) and tip (rounded / sharp / button).
-- **Lips**: ratio (thin upper / fuller lower / balanced / plush / cupid's-bow defined), natural colour, AND finish/state (matte natural / glossy / lip-gloss shine / chapped / bitten).
-- **Skin texture in the face**: freckles with **specific placement** ("across the bridge of the nose", "scattered over the cheekbones", "a soft constellation on her forehead and shoulders"), beauty marks (with placement), dimples, under-eye hollows, natural asymmetry. Skip cleanly if she has flawless skin, but name it ("clear, flawless skin without visible texture").
-- **Habitual / signature makeup style** — not the scene's makeup, her DEFAULT: bare-face, barely-there, glamour-glossy, soft smoky, hard grunge, pin-up red lip, etc.
-- **Habitual at-rest expression**: smirking, serene, tired bedroom-eyes, openly inviting, closed-off and stoic, slightly amused, perpetually unimpressed. One short phrase.
+ANCHOR FORMAT — match the rhythm of this gold-standard from production Vivid 3 (1.json's rawFacePrompt):
 
-Example: "She has a softly oval face with a slightly longer midface, broad cheekbones, and a narrow tapered jaw. Her wide-set almond eyes are a striking moss green beneath thick, softly arched dark brows, framed by long lashes and a clean barely-there flick of warm-brown liner; her straight fine-bridged nose sits above full natural-rose lips with a slightly thinner upper, finished in a soft glossy balm. A faint dusting of freckles crosses the bridge of her nose and the highs of her cheekbones, subtle under-eye hollows give her face a quietly tired warmth, and her default expression is a small, faintly amused half-smile — the look of someone who has already done the math on the room."
+\`"A beautiful woman in her early 20s with a heart-shaped face, large sparkling bright blue eyes framed by long heavily curled lashes with defined eye makeup and warm lash-line liner, high sculpted cheekbones with subtle contour, softly arched brows slightly darker than her hair, a small refined nose, full plush naturally rosy lips with a glossy finish, a beaming bright white smile with straight teeth and a single endearing dimple on one cheek, warm golden sun-kissed tan skin with a fresh dewy glow and visible gold shimmer on her shoulders and lightly defined collarbone hollows, and long honey blonde hair in soft bouncy loose waves framing her face naturally with slight windswept strands."\`
+
+ONE flowing paragraph — comma-chained clauses, no period breaks until the end (a second short sentence is allowed only for habitual at-rest expression). The clauses cover, in this canonical order, EVERY axis:
+
+1. **Opening qualifier + face shape** — "a beautiful woman with a heart-shaped face", "a striking woman with an oval face", or similar. Pick one of: Diamond, Heart, Inverted triangle, Oval, Rectangle, Round, Square, Triangle.
+2. **Eyes** — size + shape + colour + lashes + habitual eye makeup. ALL FIVE in one clause (e.g. "large sparkling bright blue eyes framed by long heavily curled lashes with defined eye makeup and warm lash-line liner"). Never skip the lashes/liner — that's what gives Vivid 3 the face anchor.
+3. **Cheekbones** — height + width + finish (e.g. "high sculpted cheekbones with subtle contour", "broad soft cheekbones with a natural flush").
+4. **Eyebrows** — weight + shade relative to hair colour (e.g. "softly arched brows slightly darker than her hair", "thick, naturally feathered dark brows").
+5. **Nose** — bridge + tip (e.g. "a small refined nose", "a straight fine-bridged nose with a rounded tip").
+6. **Lips** — ratio + natural colour + finish/state (e.g. "full plush naturally rosy lips with a glossy finish").
+7. **Smile/teeth/dimples** (when applicable) — (e.g. "a beaming bright white smile with straight teeth and a single endearing dimple on one cheek"). Skip cleanly only when she truly has no smile signature.
+8. **Skin texture in the face** — tone + finish + any freckles/beauty marks/shimmer with PLACEMENT (e.g. "warm golden sun-kissed tan skin with a fresh dewy glow and visible gold shimmer on her shoulders").
+9. **Hair framing the face** — length + colour + texture + movement (e.g. "long honey blonde hair in soft bouncy loose waves framing her face naturally with slight windswept strands"). The face block re-states hair because hair frames the face — this is mandatory.
+
+After the comma-chain paragraph, an optional second short sentence may name her **habitual at-rest expression** (smirking, serene, tired bedroom-eyes, openly inviting, closed-off and stoic, slightly amused). Only add this if it sharpens the character.
+
+FORBID (anti-patterns drawn from production failure modes):
+- ❌ Weighted-paren tag lists. samples/characters/2.json, 6.json, 9.json: \`"((Freckles)), thick full lips, ((thick eyebrows)), (oval face: 1.3), (chiseled jawline: 1.3), (thin features: 1.4)"\` and \`"(((!VERY THICK EYEBROWS!))), ((THICK FULL LIPS)), (FRECKLES:1.2), lipgloss"\`. Vivid 3 doesn't read weighted parens — they degrade the render.
+- ❌ Comma-separated keyword dumps. samples/characters/5.json: \`"blue eyes, ear piercings, pretty face, beautiful face, long eyelashes, thick eyelashes, eyelashes,"\`. This is a tag list, not a description.
+- ❌ Bracket-label sections. samples/characters/4.json: \`"[face: beautiful symmetrical face with soft features ...] [eyes: large expressive dark brown asian eyes ...]"\`. No brackets.
+- ❌ Empty/null face block. samples/characters/11.json has \`rawFacePrompt: ""\` — Vivid 3 then has no face anchor and the render drifts. The block MUST be populated.
+- ❌ Short, sparse face descriptions. samples/characters/8.json: \`"Miah has naturally plump lips and plenty of freckles. She wears no make-up at her place. Her eyes are large and her cheekbones wide. Her cheeks are very hollow. She has a slim face."\` — only hits 4 of the 9 required axes, leaves Vivid 3 too much room to drift.
 
 ### baseGenerationPrompt (natural prose, 1-2 paragraphs)
 The MOST IMPORTANT field. A rich novelist-style introduction to the character, written as one or two flowing paragraphs of prose. It MUST cover, woven naturally into the writing (not as a checklist):
@@ -1931,27 +1958,98 @@ Example D (preset-anchored opener, alt / gamer / vibe-driven): "Meet Britney Lop
 
 Notice across all four examples: ethnicity is specific (Scottish-Irish, Hispanic-Colombiana, Korean, Latina — not "white" or "Asian" alone); the FIRST sentence anchors the Vivid 3 presets (ethnicity + body type + skin tone + hair + eye colour) in plain prose; body proportions are enumerated as concrete shapes rather than abstract size words; at least one distinctive facial trait, one distinctive bodily trait, and one skin texture descriptor appear in every physical paragraph; tattoos and piercings are named with placement; no weighted parens, no bracketed sections, no trailing "photorealistic".
 
-### baseImagePrompt (natural prose, 1 short paragraph or 3-5 sentences)
-A natural-language scene description for her default image. Must include her physical appearance woven naturally with setting, pose, outfit, lighting, expression, and atmosphere. All body proportions MUST be consistent with baseGenerationPrompt. Write it as flowing English — NEVER end with "photorealistic" or any style descriptor, and NEVER use weighted parens.
+### baseImagePrompt (MANDATORY atomic-assembly format, anchored on production 1.json gold standard)
+
+This field uses a STRICT, REPEATABLE structure. It is NOT a free novelist paragraph. Vivid 3's OurDream pipeline reads it best as a short, anchor-rich, atomic-assembly prompt. Every Vivid 3 character MUST follow this exact pattern.
+
+REQUIRED STRUCTURE — write in this exact sequence, then ONE scene/lighting/expression sentence:
+
+1. \`"A {age}-year-old {ethnicity} woman."\` — opening anchor sentence. Use the specific ethnicity preset (e.g. "Hispanic-Colombiana", "Scandinavian", "Korean", "Scottish-Irish"). Never bare "white" or "Caucasian" if a more specific origin was established.
+2. \`"She has {skinColor}."\` — pull the prose-rich skinColor value from ourDreamFields verbatim (tone + finish, e.g. "warm golden sun-kissed tan skin with a natural dewy glow").
+3. \`"She has {hairColor} hair, {hairStyle parens-tags} and {eyeColor}."\` — three anchors in one sentence. hairColor is the prose-rich value; hairStyle is the parens-tag triplet (e.g. \`(long_wavy_hair), (voluminous_hair), (loose_waves_hair)\`); eyeColor is the prose-rich qualifier (e.g. "large sparkling vivid bright blue eyes").
+4. \`"She has {bodyType}."\` — prose-rich bodyType value (e.g. "very slim lean athletic build, slim narrow hips, subtle thigh gap").
+5. \`"She has {breastSize}."\` — prose-rich breastSize value (e.g. "medium firm perky natural breasts, youthful lift").
+6. \`"{customPhysicalDetails sentence}."\` — paste the full customPhysicalDetails sentence verbatim (the body-proportion summary).
+7. ONE scene/lighting/expression sentence woven on the end — setting + light + a small action or expression beat.
+
+Every \`{...}\` value MUST come from the matching ourDreamFields key or customPhysicalDetails verbatim. The 6-sentence atomic spine is what gives Vivid 3 its anchors; do not paraphrase it into a "novelist paragraph" — the rhythm itself is what renders.
+
+✅ GOLD STANDARD (1.json, production Vivid 3 output — copy this rhythm verbatim):
+
+\`"A 21-year-old Caucasian woman. She has warm golden sun-kissed tan skin with a natural dewy glow. She has honey blonde hair with lighter face-framing highlights and warm golden roots hair, (long_wavy_hair), (voluminous_hair), (loose_waves_hair) and large sparkling vivid bright blue eyes. She has very slim lean athletic build, slim narrow hips, subtle thigh gap. She has medium firm perky natural breasts, youthful lift. She is very slim with a lean athletic build, long slender legs with a thigh gap, a toned flat stomach, very slim narrow hips, small skinny rounded perky butt with high lift, and medium firm perky natural breasts proportionate to her slim frame, standing in soft golden afternoon light against the warm wood backdrop of a Greek Life house entryway, a faint quiet smile playing on her lips."\`
 
 Continuity requirements (MANDATORY):
-- Re-state the **three core visual anchors** by name: eye colour, hair colour, and skin tone. Vivid 3 is a fresh read each scene — without these, the rendered face drifts away from the character.
-- Carry over **the distinctive facial trait AND the distinctive bodily trait** named in baseGenerationPrompt (the thick eyebrows / freckles / dimple, and the specific tattoo / piercing / scar) so the same person appears.
-- Name a **light quality** consistent with her vibe — golden-hour warmth, cool morning window light, neon-tinted dusk, candle-warm interior, overcast soft daylight, harsh midday sun, monitor-glow blue, etc. Light is what makes Vivid 3 outputs look intentional rather than stock.
+- The 6 atomic sentences re-state the three core visual anchors automatically (skin tone, hair colour, eye colour). NEVER omit any of them — Vivid 3 is a fresh read each scene.
+- Carry over **the distinctive facial trait AND the distinctive bodily trait** named in baseGenerationPrompt (the thick eyebrows / freckles / dimple, and the specific tattoo / piercing / scar) so the same person appears. These can ride on the closing scene sentence ("a faint dusting of freckles catching the light", "her chest tattoo just visible above the neckline").
+- The closing scene sentence MUST name a **light quality** consistent with her vibe — golden-hour warmth, cool morning window light, neon-tinted dusk, candle-warm interior, overcast soft daylight, harsh midday sun, monitor-glow blue, etc. Light is what makes Vivid 3 outputs look intentional rather than stock.
 
-Example A (novelist / cinematic flow): "Aria sits curled in the wide bay window of her minimalist Milan loft on a quiet morning, soft golden early light spilling across her warm olive skin and catching in the long, dark chestnut waves that fall over one shoulder. She wears a cream silk camisole and loose linen trousers, her slender curvy frame turned slightly toward the glass, knees tucked up beneath her. Her moss-green almond eyes rest somewhere out across the rooftops, the small constellation of freckles across her cheekbones picked up by the light, and the thin gold chain at her throat catches faintly against her collarbone. Full lips just barely parted in a quiet, contemplative expression, the room hushed and warm in neutral tones, a single ceramic mug steaming on the sill beside her."
-
-Example B (atomic-assembly style, anchored on the OurDream gold standard from production Vivid 3 outputs — use this when the gathering vocabulary is heavy on specific physical anchors): "A 21-year-old Caucasian woman. She has warm golden sun-kissed tan skin with a natural dewy glow. She has honey blonde hair with lighter face-framing highlights and warm golden roots hair, (long_wavy_hair), (voluminous_hair), (loose_waves_hair) and large sparkling vivid bright blue eyes. She has very slim lean athletic build, slim narrow hips, subtle thigh gap. She has medium firm perky natural breasts, youthful lift. She is very slim with a lean athletic build, long slender legs with a thigh gap, a toned flat stomach, very slim narrow hips, small skinny rounded perky butt with high lift, and medium firm perky natural breasts proportionate to her slim frame, standing in soft golden afternoon light against the warm wood backdrop of a Greek Life house entryway, a faint quiet smile playing on her lips."
-
-Notice in Example B: the prompt opens with \`"A {age}-year-old {ethnicity} woman."\` then assembles atomic statements ("She has {skinColor}. She has {hairColor}, {hairStyle parens} and {eyeColor}. She has {bodyType}. She has {breastSize}."), pulling the atomic values from ourDreamFields verbatim. The structure is short, repetitive, anchor-rich — this is what Vivid 3 on OurDream actually consumes best, and it preserves the parenthesised hairStyle tags. Close with one short scene/lighting/expression sentence. Pick Example B's pattern by default for new Vivid 3 characters; pick Example A only when the character's vibe demands a more atmospheric novelist opener.
+FORBID (anti-patterns observed in degraded production samples):
+- ❌ Free novelist paragraph without the 6-sentence atomic spine. The atomic spine is REQUIRED — even when the character's vibe is moody/atmospheric, lead with the spine and add atmosphere only in the closing scene sentence.
+- ❌ Weighted-paren tag lists in the prompt body. samples/characters/2.json: \`"TALL, (brunette hair), (age: 21), ((FRECKLES: 1.3)), (Eye color: silver), (long legs), (hourglass waist), (toned thighs), (perky tits) ..."\`. The ONLY parens allowed in baseImagePrompt are the hairStyle parens-tags from sentence 3.
+- ❌ Comma-separated keyword dumps. samples/characters/3.json: \`"18-year-old Latina emo-goth girl, 5'1, slim body, flat chest, skinny hips and butt, pale light skin, oversized black hoodie, layered dark alternative clothing, fishnet sleeves, chains, studded belt, striped thigh-high socks ..."\`. Open with the atomic spine; fold outfit into the closing scene sentence.
+- ❌ Bracket-label sections. samples/characters/4.json: \`"[character: Emma ...] [hair: voluminous ...] [face: beautiful symmetrical ...] [eyes: large expressive ...] [skin: smooth warm caramel-brown ...] [body: slim hourglass ...]"\`. No brackets anywhere.
+- ❌ Trailing style descriptors. Never end with "photorealistic", "fashion editorial style", "8k resolution", or similar. Vivid 3 ignores them and they shorten the scene budget.
+- ❌ Concatenating customPhysicalDetails immediately after sentence 5 as a giant blob. The "She is ..." body-proportion sentence (step 6) is its OWN sentence — start it with a capital letter and a fresh "She is" / "She has". samples/characters/4.json runs the bracket-label block straight together with no atomic spine at all.
 
 ${OUR_DREAM_FIELDS_BLOCK}
 
-**Vivid 3-specific adjustment for ourDreamFields**:
-- For hairStyle on Vivid 3, **PREFER the parenthesised underscore-glued tag format** (e.g. \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\`) — this is what OurDream's Vivid 3 pipeline accepts and renders best for hair styling. Flowing prose for hairStyle is allowed but is the second choice.
-- For the other 7 prose fields (hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor), use natural prose — Vivid 3 reads them better as descriptive phrases.
-- For tags, use Title Case 1-3 word categorical labels as specified above.
-The atomic values feed OurDream's form, but they should still echo the prose style of your other Vivid 3 blocks for maximum coherence.`;
+**Vivid 3-specific MANDATORY format for ourDreamFields** (every single value must hit the ✅ column — these are the values OurDream's Vivid 3 pipeline anchors on):
+
+Every field MUST be a populated prose-rich string. NEVER empty, NEVER null, NEVER a single enum word. The schema requires \`min(1)\` — Vivid 3 quality requires much more than that.
+
+**hairStyle** — REQUIRED format: single-parens, underscore-glued tags, 2 to 4 tags separated by commas.
+- ❌ \`"Ponytail"\`, \`"Bangs"\`, \`"Braided"\`, \`"Bun"\`, \`"Wavy"\` — bare enum labels strip every visual cue. (samples/characters/2.json, 4.json, 8.json, 11.json all fail this way.)
+- ❌ \`"((long straight blonde hair with bangs))"\` — double parens render badly on Vivid 3. (samples/characters/7.json.)
+- ❌ \`"long, straight platinum-blonde hair with a strict center part"\` — pure prose loses the parens anchor. (samples/characters/10.json.)
+- ❌ \`"medium hair"\`, \`"layered hair, long sidebangs"\` — comma-tag list without parens. (samples/characters/5.json.)
+- ✅ \`"(long_wavy_hair), (voluminous_hair), (loose_waves_hair)"\` — single parens, underscores, 2-4 tags. This is what 1.json uses and it renders best.
+- ✅ Other valid examples: \`"(messy_low_ponytail), (face_framing_strands), (loose_baby_hairs)"\`, \`"(braided_crown), (long_braid), (loose_strands)"\`, \`"(short_pixie_cut), (textured_layers)"\`.
+
+**hairColor** — REQUIRED format: base colour + at least one secondary descriptor (highlights, lowlights, roots, sheen, undertone).
+- ❌ \`"Blonde"\`, \`"Brunette"\`, \`"Black"\`, \`"Dirty blonde"\`, \`"pale-blonde"\` — bare colour. (samples/characters/2.json, 5.json, 6.json, 8.json, 9.json, 11.json.)
+- ❌ \`"platinum-blonde"\` — single-word slug. (samples/characters/10.json.)
+- ✅ \`"honey blonde hair with lighter face-framing highlights and warm golden roots"\` (1.json).
+- ✅ Other valid examples: \`"deep glossy raven black with subtle blue undertones"\`, \`"rich auburn with copper highlights at the ends and slightly darker roots"\`, \`"warm chestnut brown with caramel face-framing pieces"\`.
+
+**bodyType** — REQUIRED format: build phrase + at least two concrete proportion specifiers.
+- ❌ \`"Slim"\`, \`"Athletic"\` — bare enum. (samples/characters/2.json, 3.json, 4.json, 5.json, 6.json, 8.json, 9.json, 11.json.)
+- ❌ \`""\` — empty string. (samples/characters/10.json.)
+- ✅ \`"very slim lean athletic build, slim narrow hips, subtle thigh gap"\` (1.json).
+- ✅ Other valid examples: \`"voluptuous hourglass figure, wide curvy hips, full natural breasts, narrow waist"\`, \`"tall athletic build, V-taper shoulders, toned thighs, visible muscle definition"\`, \`"petite slim figure, narrow shoulders, small bust, gentle natural curves"\`.
+
+**ethnicity** — REQUIRED format: specific preset from the reference vocabulary above, never broad alone.
+- ❌ \`"White"\`, \`"Caucasian"\` — broad category when a specific origin was establishable. Many production samples (2.json, 5.json, 6.json, 8.json, 9.json, 10.json, 11.json) fall back to "White" / "Caucasian" even when the gathering had richer cues.
+- ❌ \`null\`, \`""\` — empty. (samples/characters/7.json has \`ethnicity: null\`.)
+- ✅ Specific preset: \`"Korean"\`, \`"Hispanic-Colombiana"\`, \`"Mexican-American"\`, \`"Scandinavian"\`, \`"Scottish-Irish"\`, \`"Italian"\`, \`"Japanese"\`, \`"Brazilian"\`, \`"Vietnamese-French"\`, etc.
+- ✅ Fallback to \`"Caucasian"\` is ONLY acceptable when the gathering truly has no specific origin signal. Same for \`"Asian"\`, \`"Black"\`, \`"Latina"\` — only as last resort.
+
+**skinColor** — REQUIRED format: tone phrase + finish descriptor.
+- ❌ \`"Tan"\`, \`"Fair"\`, \`"Light"\`, \`"Olive"\`, \`"Dark"\` — bare preset label. (samples/characters/2.json, 4.json, 5.json, 6.json, 8.json, 9.json, 10.json, 11.json.)
+- ❌ \`null\`, \`""\` — empty. (samples/characters/7.json.)
+- ✅ \`"warm golden sun-kissed tan skin with a natural dewy glow"\` (1.json).
+- ✅ Other valid examples: \`"fair porcelain skin with a cool undertone and faint freckles across the nose"\`, \`"rich mahogany skin with warm golden undertones and a subtle natural sheen"\`, \`"warm caramel skin with a soft matte finish"\`, \`"olive skin with a healthy sun-warmed glow"\`.
+
+**breastSize** — REQUIRED format: size + shape + firmness/lift descriptor. Must be proportional to bodyType.
+- ❌ \`"Small"\`, \`"Medium"\`, \`"XL"\`, \`"Flat"\` — bare enum. (samples/characters/2.json, 3.json, 4.json, 5.json, 6.json, 8.json, 9.json, 11.json.)
+- ❌ \`""\` — empty. (samples/characters/10.json.)
+- ✅ \`"medium firm perky natural breasts, youthful lift"\` (1.json).
+- ✅ Other valid examples: \`"large full natural breasts with a subtle teardrop shape"\`, \`"small soft natural breasts with a gentle slope"\`, \`"full round high-set breasts with natural firmness"\`.
+
+**buttSize** — REQUIRED format: size + shape + lift/curve descriptor. Must be proportional to bodyType.
+- ❌ \`"Large"\`, \`"Medium"\`, \`"Skinny"\` — bare enum. (samples/characters/2.json, 4.json, 5.json, 6.json, 8.json, 9.json, 11.json.)
+- ❌ \`""\` — empty. (samples/characters/10.json.)
+- ✅ \`"small skinny rounded perky butt, high lift"\` (1.json).
+- ✅ Other valid examples: \`"full rounded heart-shaped butt with a soft natural curve"\`, \`"firm round bubble butt with high lift"\`, \`"slim flat athletic butt with a subtle curve"\`.
+
+**eyeColor** — REQUIRED format: size/brightness adjective + colour qualifier.
+- ❌ \`"Blue"\`, \`"Brown"\`, \`"Silver"\`, \`"Green"\` — bare colour. (samples/characters/2.json, 3.json, 5.json, 6.json, 8.json, 9.json, 10.json, 11.json.)
+- ❌ \`null\` — empty. (samples/characters/7.json.)
+- ✅ \`"large sparkling vivid bright blue eyes"\` (1.json).
+- ✅ Other valid examples: \`"deep moss-green almond eyes with hooded lids"\`, \`"large warm chocolate-brown doe eyes"\`, \`"striking icy grey eyes with a faint silver ring"\`.
+
+**tags** — Title Case 1-3 word categorical labels as specified in the shared block above.
+
+The atomic values feed OurDream's form AND get inlined verbatim into baseImagePrompt's atomic-assembly spine. They are the most important fields — paraphrasing them weakly degrades the entire image render.`;
 }
 
 export function buildProfileInferencePrompt(difficulty: Difficulty): string {
@@ -2332,10 +2430,29 @@ Vivid 3 reliably recognizes these named aesthetics. If the scene's mood/setting 
 Vivid 3 understands these framing/lighting cues well — use them when relevant:
 "medium-shot portrait", "close-up portrait", "wide shot", "low angle shot", "overhead angle", "shot from her partner's point of view", "late afternoon golden hour", "warm direct sunlight casting a long shadow", "soft natural lighting", "ambient blue LED glow", "neon blue and lavender wash".
 
+## Distinguishing-feature visibility (MANDATORY — Vivid 3 is stateless per render)
+
+Vivid 3 does NOT remember the character between scenes. Every tattoo, piercing, scar, stretch mark, freckle pattern, beauty mark, dimple, or birthmark mentioned in customPhysicalDetails / customFaceDetails MUST be addressed in each scene prompt — either named as visible, or named as hidden by the framing / outfit / pose. Silence is NOT acceptable: a feature not named is a feature Vivid 3 may render in the wrong place, or omit when it should be visible.
+
+For each scene, run this checklist before writing the prose:
+
+1. **List every distinguishing feature** mentioned in customPhysicalDetails / customFaceDetails (tattoos with placement, piercings with placement, freckle patterns with placement, scars, stretch marks, beauty marks, dimples, birthmarks).
+2. **For each feature, decide visibility** given the scene's framing (close-up vs wide), pose (back turned, lying down, etc.), outfit (covered vs uncovered), and lighting.
+3. **Visible features** — name each one with placement, woven into the scene prose. Examples: "the small line-work moth tattoo low on her right ribcage just visible above the bikini bottom", "the silver hoop in her left nostril catching the warm light", "the constellation of freckles across her cheekbones picked up by the morning sun", "faint silvery stretch marks tracing the outer curve of her hips, visible where the towel slips".
+4. **Hidden features** — name them as hidden, with the reason, in a short clause. Examples: "her Japanese sleeve tattoo hidden under the long sleeve of her black turtleneck", "the septum piercing tucked out of view as she looks down", "the under-chest tattoo concealed by the cropped sweater". This stops Vivid 3 from inventing the feature in the wrong place or forgetting it exists. A single closing clause like "her tattoos all covered by the long-sleeve top and high-waisted jeans" is acceptable when many features are uniformly hidden.
+
+A scene prompt that names ZERO distinguishing features is incomplete unless the character truly has none. If the customPhysicalDetails / customFaceDetails blocks list no tattoos/piercings/freckles/scars/marks at all, skip this checklist.
+
+Visibility examples (Vivid 3):
+- ✅ Close-up portrait, character has "septum piercing", "small moth tattoo on right ribcage", "freckles across cheekbones": "...her face fills the frame, the silver septum hoop catching the soft window light, a faint constellation of freckles dusting the high points of her cheekbones; her ribcage tattoo is outside the frame."
+- ✅ Bikini beach shot, character has "floral sleeve on left arm", "bellybutton piercing", "tan-line stretch marks on hips": "...her floral sleeve tattoo bright against the sun on her left arm, the small gold barbell at her navel glinting, and the faint silvery stretch marks at the outer curve of her hips catching the late afternoon light."
+- ✅ Fully clothed business setting, same character: "...her floral sleeve tattoo hidden under the long sleeve of her white blouse, the navel piercing concealed beneath her tailored skirt, the stretch marks not visible in this framing."
+
 ## Anti-patterns
 
 - **Do not reintroduce anatomical hyperboles at scene level.** Phrases like "beach ball breasts", "absurdly massive", "comically huge" distort the rendering even when the body type was clean at character level. Stay realistic.
 - **Do not describe inherent body morphology** (see the section above). Outfit behavior, scene-state body details, and what's currently visible are allowed.
+- **Do not silently drop distinguishing features.** See the visibility checklist above — every tattoo / piercing / scar / stretch mark / freckle pattern / beauty mark / dimple MUST be addressed as visible or hidden.
 
 ### prompt (REQUIRED, string — Vivid 3 natural prose)
 **3 to 6 flowing sentences** of natural English describing the scene as it would be filmed. Across the prose, cover (in whatever order reads best):
@@ -2343,6 +2460,7 @@ Vivid 3 understands these framing/lighting cues well — use them when relevant:
 - Pose / action — what she is doing in this moment
 - Outfit / clothing state — what she is wearing or how it has shifted
 - Scene-state body details tied to the action (e.g. "her hair coming loose from its tie", "skin slick with oil", "bare under the half-open robe") — describing what's visible IN this scene, NOT inherent body morphology
+- **Distinguishing-feature visibility** — for every tattoo / piercing / freckle pattern / scar / stretch mark / beauty mark / dimple in customPhysicalDetails or customFaceDetails, name it as visible (with placement) or as hidden (with the reason — out of frame, covered by outfit, in shadow). See the "Distinguishing-feature visibility" section above for the checklist and examples.
 - Setting / environment
 - Lighting and time of day
 - Expression and mood

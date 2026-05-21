@@ -626,6 +626,15 @@ export const systemFrameworkUpgradeSchema = characterSchema
 	});
 export type SystemFrameworkUpgrade = z.infer<typeof systemFrameworkUpgradeSchema>;
 
+export const vivid3PhysicalRefreshSchema = characterSchema.pick({
+	customPhysicalDetails: true,
+	customFaceDetails: true,
+	baseGenerationPrompt: true,
+	baseImagePrompt: true,
+	ourDreamFields: true,
+});
+export type Vivid3PhysicalRefresh = z.infer<typeof vivid3PhysicalRefreshSchema>;
+
 export const characterLightSchema = characterSchema
 	.pick({
 		firstName: true,
