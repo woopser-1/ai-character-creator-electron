@@ -9,6 +9,7 @@ import type { Character, GenerationModel, Scene, StoredCharacter } from "@shared
 import { DEFAULT_GENERATION_MODEL } from "@shared/schemas";
 import {
   buildCharacterGatheringPrompt,
+  buildGroupChatGatheringPrompt,
   buildRefineSceneGatheringPrompt,
   buildRegenerationGatheringPrompt,
   buildSceneGatheringPrompt,
@@ -27,7 +28,8 @@ export type GatherFlow =
       existingScenes: Scene[];
       targetScene: Scene;
     }
-  | { flow: "gather-regenerate"; character: StoredCharacter };
+  | { flow: "gather-regenerate"; character: StoredCharacter }
+  | { flow: "gather-group-chat"; characters: Character[] };
 
 interface ActiveSession {
   id: string;
@@ -67,6 +69,8 @@ function buildSystemPrompt(flow: GatherFlow): string {
       return buildRefineSceneGatheringPrompt(flow.character, flow.existingScenes, flow.targetScene);
     case "gather-regenerate":
       return buildRegenerationGatheringPrompt(flow.character.character);
+    case "gather-group-chat":
+      return buildGroupChatGatheringPrompt(flow.characters);
   }
 }
 

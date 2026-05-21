@@ -353,6 +353,7 @@ export function CharacterDetailPage({ id }: { id: string }) {
 				setUpgradeOpen(true);
 			}}
 			refreshVisualsBusy={refreshVisualsBusy}
+			upgradeBusy={upgradeBusy}
 		/>
 	);
 
@@ -460,7 +461,11 @@ export function CharacterDetailPage({ id }: { id: string }) {
 							disabled={upgradeBusy}
 							onClick={() => void handleUpgradeSystemFramework()}
 						>
-							<Sparkles className="h-3.5 w-3.5" />
+							{upgradeBusy ? (
+								<Loader2 className="h-3.5 w-3.5 animate-spin" />
+							) : (
+								<Sparkles className="h-3.5 w-3.5" />
+							)}
 							{upgradeBusy ? "Upgrading…" : "Upgrade now"}
 						</Button>
 					</DialogFooter>
@@ -623,6 +628,7 @@ function ActionToolbar({
 	onRegenerateMoodAxes,
 	onUpgradeFramework,
 	refreshVisualsBusy,
+	upgradeBusy,
 }: {
 	data: StoredCharacter;
 	exportBusy: boolean;
@@ -639,6 +645,7 @@ function ActionToolbar({
 	onRegenerateMoodAxes: () => void;
 	onUpgradeFramework: () => void;
 	refreshVisualsBusy: boolean;
+	upgradeBusy: boolean;
 }) {
 	const isVivid3 = getStoredImageModel(data) === "Vivid 3";
 	return (
@@ -713,8 +720,15 @@ function ActionToolbar({
 									}}
 								/>
 								<MenuItem
-									icon={<Sparkles className="h-3.5 w-3.5" />}
-									label="Upgrade to latest framework"
+									disabled={upgradeBusy}
+									icon={
+										upgradeBusy ? (
+											<Loader2 className="h-3.5 w-3.5 animate-spin" />
+										) : (
+											<Sparkles className="h-3.5 w-3.5" />
+										)
+									}
+									label={upgradeBusy ? "Upgrading…" : "Upgrade personality"}
 									onClick={() => {
 										onMoreOpenChange(false);
 										onUpgradeFramework();
@@ -731,9 +745,7 @@ function ActionToolbar({
 											)
 										}
 										label={
-											refreshVisualsBusy
-												? "Refreshing…"
-												: "Refresh Vivid 3 physical fields"
+											refreshVisualsBusy ? "Upgrading…" : "Upgrade appearance"
 										}
 										onClick={() => {
 											onMoreOpenChange(false);

@@ -757,6 +757,87 @@ export const GENERATION_MODEL_META: Record<
 	},
 };
 
+export const groupChatGreetingSchema = z.object({
+	speakerFirstName: z
+		.string()
+		.min(1)
+		.describe(
+			"First name of the speaking character. MUST match the firstName of ONE of the chosen characters verbatim — no nicknames, no last names, no characters outside the cast.",
+		),
+	message: z
+		.string()
+		.min(1)
+		.describe(
+			"The character's opening message body. MUST start with the standard 3-line bracketed metadata header (line 1: `[Date: …] [Loc: …]`, line 2: `[Outfit: …] [State: …]`, line 3: `[Mood: …]`), then a blank line, then the body. The body uses *asterisks* for action beats and spoken dialogue on plain lines. Group chats are IN-PERSON scenes — do NOT use the `text:` or `call:` prefixes (those are for SMS / phone-call single-character scenarios). Length should respect the group chat's messageLength preference. Speaker identity is captured by the sibling `speakerFirstName` field; do not encode it inside the body.",
+		),
+});
+
+export type GroupChatGreeting = z.infer<typeof groupChatGreetingSchema>;
+
+export const MIN_GROUP_CHAT_GREETINGS = 1;
+export const MAX_GROUP_CHAT_GREETINGS = 5;
+
+export const singleGroupChatGreetingOutputSchema = z.object({
+	greeting: groupChatGreetingSchema,
+});
+export type SingleGroupChatGreetingOutput = z.infer<
+	typeof singleGroupChatGreetingOutputSchema
+>;
+
+export const groupChatSchema = z.object({
+	title: z
+		.string()
+		.min(1)
+		.describe(
+			"Short, evocative title naming this multi-character chat scenario (e.g. 'Late-night studio session with Mira & Soren', '48 hours in Lisbon — Astrid, Cal and Reza'). Plain text, no quotes.",
+		),
+	publicDescription: z
+		.string()
+		.describe(
+			"Public-facing one-paragraph description that introduces the scene and the chosen characters as a group. Reads as a story-blurb the user could paste publicly — names the characters and the setup without exposing the dynamic mechanics from privateDetails.",
+		),
+	scenario: z
+		.string()
+		.describe(
+			"Detailed narrative setup (~1800-2400 chars) of the group chat scene followed by a [FORMAT RULES] block. The narrative establishes location, time of day, why these specific characters are together, and what is happening when the conversation opens. The trailing [FORMAT RULES] block defines the 3-line metadata-header convention — [Date: …] [Loc: …] / [Outfit: …] [State: …] / [Mood: …] — and how speakers rotate, how the user is addressed, and how *asterisk-wrapped* actions + plain-line dialogue work. Group chats are in-person scenes; no `text:` or `call:` prefixes.",
+		),
+	privateDetails: z
+		.string()
+		.describe(
+			"Director's-cut full system spec (~1800-2800 chars) — NOT public. Structured as XML-tagged behavioral sections (same convention as a Character's additionalPersonalityDetails). MUST include, in this exact order, these top-level tags with their exact names: <Cast_Roster>, <Per_Character_Stance> (with nested per-character <{FirstName}> sub-blocks), <Alliance_Tension_Map>, <Message_Header_Template> (containing the literal 3-line [Date: …] / [Outfit: …] / [Mood: …] template the downstream chat must prepend to every assistant turn), <Speaker_Rotation>, <Pacing_And_Escalation>, <User_Integration>, <Hidden_Group_Trust_System>. Use weighted notation (label:1.X) inside sections for high-priority directives.",
+		),
+	greetingMessages: z
+		.array(groupChatGreetingSchema)
+		.min(MIN_GROUP_CHAT_GREETINGS)
+		.max(MAX_GROUP_CHAT_GREETINGS)
+		.describe(
+			"REQUIRED. 1-5 opening messages in chronological order — these are the literal first turns the downstream chat starts the conversation with, before the user has typed anything. Each entry pairs a speakerFirstName (matching one of the cast's first names verbatim) with the message body in the multi-speaker metadata-header format. Not every cast member must speak — a 4-character group chat might open with just 2 of them exchanging dialogue while the others observe — but the array MUST contain at least one entry. The first message in the array is the very first thing the downstream chat says; subsequent messages are interjections / responses building the opening beat. Length tracks the messageLength preference.",
+		),
+	tags: z
+		.array(z.string().min(1))
+		.min(6)
+		.max(12)
+		.describe(
+			"6-12 categorical tags in Title Case (1-3 words each) used for group chat discovery and at-a-glance browsing. Mix categories — aim for: 1-2 setting tags (e.g. 'Dinner Party', 'Layover', 'After Hours', 'Beach House'), 1-2 ensemble dynamic tags (e.g. 'Love Triangle', 'Old Friends', 'Rivalry', 'Found Family'), 1-2 tone tags (e.g. 'Chill Banter', 'Simmering Tension', 'Slow Burn', 'Comedy'), 1-2 narrative arc tags (e.g. 'Reunion', 'Confrontation', 'Secret Revealed', 'Power Shift'), and 1-2 user-POV tags (e.g. 'POV Host', 'Outsider', 'Romantic Triangle'). Tags must be coherent with this specific scenario — never generic filler.",
+		),
+});
+
+export type GroupChat = z.infer<typeof groupChatSchema>;
+
+export interface StoredGroupChat {
+	id: string;
+	createdAt: string;
+	groupChat: GroupChat;
+	/** References to existing StoredCharacter.id — 2..6 entries. */
+	characterIds: string[];
+	messageLength: MessageLength;
+	gatheringSummary?: string;
+	gatheringMessages?: UIMessage[];
+}
+
+export const MIN_GROUP_CHAT_CHARACTERS = 2;
+export const MAX_GROUP_CHAT_CHARACTERS = 6;
+
 export const appSettingsSchema = z.object({
 	superAdmin: z.boolean().default(false),
 	generationModel: z.enum(GENERATION_MODELS).default(DEFAULT_GENERATION_MODEL),

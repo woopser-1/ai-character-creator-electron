@@ -74,6 +74,11 @@ export type StartChatPayload =
 			flow: "gather-regenerate";
 			character: import("./schemas").StoredCharacter;
 			initialUserMessage: string;
+	  }
+	| {
+			flow: "gather-group-chat";
+			characters: import("./schemas").Character[];
+			initialUserMessage: string;
 	  };
 
 export type StartChatResult =

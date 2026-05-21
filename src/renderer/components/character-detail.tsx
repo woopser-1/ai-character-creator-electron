@@ -17,11 +17,12 @@ import {
 	Shield,
 	Tag,
 	User,
+	Users,
 	Wand2,
 	X,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { CopyButton } from "@/components/copy-button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ import type {
 	MoodAxis,
 	OurDreamFields,
 	StoredCharacter,
+	StoredGroupChat,
 } from "@/lib/types";
 import {
 	DIFFICULTY_META,
@@ -532,6 +534,26 @@ export function CharacterIdentity({ data }: CharacterIdentityProps) {
 	const imageModel = getStoredImageModel(data);
 	const imageModelMeta = IMAGE_MODEL_META[imageModel];
 
+	const [linkedGroupChats, setLinkedGroupChats] = useState<StoredGroupChat[]>(
+		[],
+	);
+	const [allCharacters, setAllCharacters] = useState<StoredCharacter[]>([]);
+
+	useEffect(() => {
+		let cancelled = false;
+		void Promise.all([
+			window.api.groupChats.list(),
+			window.api.characters.list(),
+		]).then(([gcs, cs]) => {
+			if (cancelled) return;
+			setLinkedGroupChats(gcs.filter((gc) => gc.characterIds.includes(data.id)));
+			setAllCharacters(cs);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [data.id]);
+
 	return (
 		<div className="flex flex-col gap-6">
 			<div className="relative">
@@ -595,6 +617,103 @@ export function CharacterIdentity({ data }: CharacterIdentityProps) {
 				<DefItem label="Image model" value={imageModelMeta.label} />
 				<DefItem label="Fetish" value={character.fetishLabel} muted />
 			</dl>
+
+			{linkedGroupChats.length > 0 && (
+				<LinkedGroupChats
+					allCharacters={allCharacters}
+					currentCharacterId={data.id}
+					groupChats={linkedGroupChats}
+				/>
+			)}
+		</div>
+	);
+}
+
+function LinkedGroupChats({
+	groupChats,
+	allCharacters,
+	currentCharacterId,
+}: {
+	groupChats: StoredGroupChat[];
+	allCharacters: StoredCharacter[];
+	currentCharacterId: string;
+}) {
+	const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
+	return (
+		<div className="flex flex-col gap-3 border-foreground/10 border-t pt-4">
+			<div className="flex items-center justify-between">
+				<div className="inline-flex items-center gap-1.5 eyebrow text-foreground/55">
+					<Users className="h-3 w-3" />
+					Group chats
+					<span className="ml-1 text-foreground/40 tabular-nums">
+						{String(groupChats.length).padStart(2, "0")}
+					</span>
+				</div>
+			</div>
+			<div className="flex flex-col gap-2">
+				{groupChats.map((gc) => {
+					const others = gc.characterIds
+						.filter((cid) => cid !== currentCharacterId)
+						.map((cid) => charactersById.get(cid))
+						.filter((c): c is StoredCharacter => Boolean(c))
+						.slice(0, 4);
+					const totalOthers =
+						gc.characterIds.length - 1 + (gc.characterIds.length === 0 ? 0 : 0);
+					const extra = totalOthers - others.length;
+					return (
+						<a
+							className="group/gc relative flex items-center gap-3 rounded-xl bg-card p-3 outline-none ring-1 ring-foreground/10 transition-all duration-200 ease-out hover:ring-foreground/25 focus-visible:ring-3 focus-visible:ring-primary/40"
+							href={`#/group-chats/${gc.id}`}
+							key={gc.id}
+						>
+							<div className="-space-x-2 flex shrink-0 items-center">
+								{others.map((m) => {
+									const name = getFullName(m.character);
+									return (
+										<span
+											className="relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-secondary/70 ring-2 ring-card"
+											key={m.id}
+											title={name}
+										>
+											{m.profileImageUrl ? (
+												<img
+													alt={name}
+													className="h-full w-full object-cover"
+													loading="lazy"
+													src={m.profileImageUrl}
+												/>
+											) : (
+												<span className="font-semibold text-[10px] text-foreground/75">
+													{initials(name) || "·"}
+												</span>
+											)}
+										</span>
+									);
+								})}
+								{extra > 0 && (
+									<span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-secondary/40 font-medium text-[10px] text-foreground/55 ring-2 ring-card">
+										+{extra}
+									</span>
+								)}
+							</div>
+							<div className="flex min-w-0 flex-1 flex-col">
+								<span className="-tracking-[0.005em] truncate font-semibold text-[0.875rem] text-foreground leading-tight">
+									{gc.groupChat.title}
+								</span>
+								<span className="mt-0.5 truncate text-[0.75rem] text-muted-foreground leading-relaxed">
+									{gc.characterIds.length} characters · {gc.messageLength}
+								</span>
+							</div>
+							<span
+								aria-hidden
+								className="shrink-0 text-foreground/35 text-xs transition-all duration-200 group-hover/gc:translate-x-0.5 group-hover/gc:text-primary"
+							>
+								›
+							</span>
+						</a>
+					);
+				})}
+			</div>
 		</div>
 	);
 }

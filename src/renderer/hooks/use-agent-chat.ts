@@ -259,14 +259,23 @@ export function useAgentChat(
 										replayTranscript,
 										newMessage,
 									}
-								: {
-										sessionId: sid,
-										oldSessionId,
-										flow: "gather-regenerate" as const,
-										character: payload.character,
-										replayTranscript,
-										newMessage,
-									};
+								: payload.flow === "gather-group-chat"
+									? {
+											sessionId: sid,
+											oldSessionId,
+											flow: "gather-group-chat" as const,
+											characters: payload.characters,
+											replayTranscript,
+											newMessage,
+										}
+									: {
+											sessionId: sid,
+											oldSessionId,
+											flow: "gather-regenerate" as const,
+											character: payload.character,
+											replayTranscript,
+											newMessage,
+										};
 			const result = await window.api.chat.restart(restartPayload);
 			if (!result.success) {
 				sessionIdRef.current = null;

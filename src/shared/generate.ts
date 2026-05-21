@@ -3,12 +3,14 @@ import type {
 	CharacterStepId,
 	Difficulty,
 	ImageModel,
+	MessageLength,
 	Scene,
 	StoredCharacter,
+	StoredGroupChat,
 } from "./schemas";
 
-export type GenerateKind = "character" | "scenes";
-export type GenerateStepId = CharacterStepId | "scenes";
+export type GenerateKind = "character" | "scenes" | "group-chat";
+export type GenerateStepId = CharacterStepId | "scenes" | "group-chat";
 export type StepStatus =
 	| "idle"
 	| "running"
@@ -112,6 +114,28 @@ export type GenerateScenesResponse =
 	| {
 			success: true;
 			scenes: Scene[];
+			usage?: StepUsage;
+			adminOverrideApplied?: boolean;
+	  }
+	| {
+			success: false;
+			error: string;
+			refusal?: boolean;
+			usage?: StepUsage;
+			adminOverrideApplied?: boolean;
+	  };
+
+export interface GenerateGroupChatPayload {
+	runId: string;
+	characterIds: string[];
+	gatheringSummary: string;
+	messageLength: MessageLength;
+}
+
+export type GenerateGroupChatResponse =
+	| {
+			success: true;
+			stored: StoredGroupChat;
 			usage?: StepUsage;
 			adminOverrideApplied?: boolean;
 	  }

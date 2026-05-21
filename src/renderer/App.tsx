@@ -9,7 +9,10 @@ import { ChromeProvider, useChromeRefs } from "@/lib/chrome-context";
 import { useRoute } from "@/lib/router";
 import { CharacterDetailPage } from "@/pages/CharacterDetail";
 import { CreatePage } from "@/pages/Create";
+import { CreateGroupChatPage } from "@/pages/CreateGroupChat";
 import { GalleryPage } from "@/pages/Gallery";
+import { GroupChatDetailPage } from "@/pages/GroupChatDetail";
+import { GroupChatsPage } from "@/pages/GroupChats";
 import { RegeneratePage } from "@/pages/Regenerate";
 import { SettingsPage } from "@/pages/Settings";
 
@@ -51,6 +54,9 @@ function AppShell() {
 					{route.name === "settings" && <SettingsPage />}
 					{route.name === "character" && <CharacterDetailPage id={route.id} />}
 					{route.name === "regenerate" && <RegeneratePage id={route.id} />}
+					{route.name === "group-chats" && <GroupChatsPage />}
+					{route.name === "group-chats-create" && <CreateGroupChatPage />}
+					{route.name === "group-chat" && <GroupChatDetailPage id={route.id} />}
 				</motion.main>
 			</AnimatePresence>
 			<div className="shrink-0" ref={setChatDockEl} />

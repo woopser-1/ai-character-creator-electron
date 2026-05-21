@@ -21,11 +21,13 @@ import type {
   CharacterStepId,
   ConfirmedProfile,
   Difficulty,
+  GroupChat,
   ImageModel,
   Measurements,
   MessageLength,
   Scene,
   StoredCharacter,
+  StoredGroupChat,
 } from "@shared/schemas";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -35,6 +37,7 @@ import {
 import type {
   GenerateCharacterAllResponse,
   GenerateCharacterStepResponse,
+  GenerateGroupChatResponse,
   GenerateProgressEvent,
   GenerateScenesResponse,
   GenerateSingleSceneResponse,
@@ -47,6 +50,10 @@ import {
   refreshVivid3Physical,
   upgradeSystemFramework,
 } from "../agent/generate-character";
+import {
+  generateGroupChat,
+  generateSingleGroupChatGreeting,
+} from "../agent/generate-group-chat";
 import { generateScenes, generateSingleScene } from "../agent/generate-scenes";
 import {
   type GatherFlow,
@@ -68,6 +75,17 @@ import {
   updateCharacter,
   updateCharacterScenes,
 } from "../storage/characters";
+import {
+  appendGroupChatGreeting,
+  deleteGroupChat,
+  deleteGroupChatGreeting,
+  getGroupChat,
+  listGroupChats,
+  saveGroupChat,
+  updateGroupChatField,
+  updateGroupChatGatheringMessages,
+  updateGroupChatGreetingMessage,
+} from "../storage/group-chats";
 import {
   deleteDraft,
   getDraft,
@@ -1359,6 +1377,299 @@ export function registerIpc(window: BrowserWindow): void {
     }
   );
 
+  ipcMain.handle("group-chats:list", async () => {
+    return listGroupChats();
+  });
+
+  ipcMain.handle("group-chats:get", async (_event, id: string) => {
+    return getGroupChat(id);
+  });
+
+  ipcMain.handle("group-chats:delete", async (_event, id: string) => {
+    await deleteGroupChat(id);
+  });
+
+  ipcMain.handle(
+    "group-chats:save",
+    async (
+      _event,
+      payload: {
+        groupChat: GroupChat;
+        characterIds: string[];
+        messageLength: MessageLength;
+        gatheringSummary?: string;
+        gatheringMessages?: UIMessage[];
+      }
+    ): Promise<StoredGroupChat> => {
+      const stored: StoredGroupChat = {
+        id: nanoid(),
+        createdAt: new Date().toISOString(),
+        groupChat: payload.groupChat,
+        characterIds: payload.characterIds,
+        messageLength: payload.messageLength,
+        gatheringSummary: payload.gatheringSummary,
+        gatheringMessages: payload.gatheringMessages,
+      };
+      await saveGroupChat(stored);
+      return stored;
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:updateField",
+    async (
+      _event,
+      payload: {
+        id: string;
+        field: "title" | "publicDescription" | "scenario" | "privateDetails";
+        value: string;
+      }
+    ): Promise<
+      { success: true; stored: StoredGroupChat } | { success: false; error: string }
+    > => {
+      try {
+        const next = await updateGroupChatField(
+          payload.id,
+          payload.field,
+          payload.value
+        );
+        return { success: true, stored: next };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:generateGreeting",
+    async (
+      _event,
+      payload: { id: string; speakerFirstName: string }
+    ): Promise<
+      { success: true; stored: StoredGroupChat } | { success: false; error: string }
+    > => {
+      const existing = await getGroupChat(payload.id);
+      if (!existing) {
+        return { success: false, error: `Group chat ${payload.id} not found` };
+      }
+      const settings = await getSettings();
+      const allCharacters = await listCharacters();
+      const byId = new Map(allCharacters.map((c) => [c.id, c]));
+      const cast: Character[] = [];
+      for (const cid of existing.characterIds) {
+        const found = byId.get(cid);
+        if (!found) {
+          return {
+            success: false,
+            error: `Character ${cid} no longer exists — cannot generate a greeting for a missing cast member.`,
+          };
+        }
+        cast.push(found.character);
+      }
+      const matchesSpeaker = cast.find(
+        (c) =>
+          c.firstName.toLowerCase() === payload.speakerFirstName.toLowerCase()
+      );
+      if (!matchesSpeaker) {
+        return {
+          success: false,
+          error: `No cast member with first name "${payload.speakerFirstName}" — pick someone from the existing cast.`,
+        };
+      }
+      const result = await generateSingleGroupChatGreeting({
+        runId: `group-greet-${Date.now()}`,
+        characters: cast,
+        speakerFirstName: matchesSpeaker.firstName,
+        scenario: existing.groupChat.scenario,
+        privateDetails: existing.groupChat.privateDetails,
+        existingGreetings: existing.groupChat.greetingMessages ?? [],
+        messageLength: existing.messageLength,
+        superAdmin: settings.superAdmin,
+        generationModel: settings.generationModel,
+        onEvent: emitProgress,
+      });
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+      try {
+        const next = await appendGroupChatGreeting(payload.id, result.data);
+        return { success: true, stored: next };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:deleteGreeting",
+    async (
+      _event,
+      payload: { id: string; index: number }
+    ): Promise<
+      { success: true; stored: StoredGroupChat } | { success: false; error: string }
+    > => {
+      try {
+        const next = await deleteGroupChatGreeting(payload.id, payload.index);
+        return { success: true, stored: next };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:updateGreetingMessage",
+    async (
+      _event,
+      payload: { id: string; index: number; message: string }
+    ): Promise<
+      { success: true; stored: StoredGroupChat } | { success: false; error: string }
+    > => {
+      try {
+        const next = await updateGroupChatGreetingMessage(
+          payload.id,
+          payload.index,
+          payload.message
+        );
+        return { success: true, stored: next };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:updateGatheringMessages",
+    async (
+      _event,
+      payload: { id: string; gatheringMessages: UIMessage[] }
+    ): Promise<StoredGroupChat | null> => {
+      return updateGroupChatGatheringMessages(
+        payload.id,
+        payload.gatheringMessages
+      );
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:regenerate",
+    async (
+      _event,
+      payload: { id: string }
+    ): Promise<GenerateGroupChatResponse> => {
+      const existing = await getGroupChat(payload.id);
+      if (!existing) {
+        return { success: false, error: `Group chat ${payload.id} not found` };
+      }
+      const settings = await getSettings();
+      const allCharacters = await listCharacters();
+      const byId = new Map(allCharacters.map((c) => [c.id, c]));
+      const characters: Character[] = [];
+      for (const cid of existing.characterIds) {
+        const found = byId.get(cid);
+        if (!found) {
+          return {
+            success: false,
+            error: `Character ${cid} no longer exists — cannot regenerate a group chat with a missing member. Restore the character or create a new group chat.`,
+          };
+        }
+        characters.push(found.character);
+      }
+      const result = await generateGroupChat({
+        runId: `group-regen-${Date.now()}`,
+        characters,
+        gatheringSummary: existing.gatheringSummary ?? "",
+        messageLength: existing.messageLength,
+        superAdmin: settings.superAdmin,
+        generationModel: settings.generationModel,
+        onEvent: emitProgress,
+      });
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error,
+          refusal: result.refusal,
+          usage: result.usage,
+          adminOverrideApplied: result.adminOverrideApplied,
+        };
+      }
+      const next: StoredGroupChat = {
+        ...existing,
+        groupChat: result.data,
+      };
+      await saveGroupChat(next);
+      return {
+        success: true,
+        stored: next,
+        usage: result.usage,
+        adminOverrideApplied: result.adminOverrideApplied,
+      };
+    }
+  );
+
+  ipcMain.handle(
+    "generate:group-chat",
+    async (
+      _event,
+      payload: {
+        runId: string;
+        characterIds: string[];
+        gatheringSummary: string;
+        messageLength: MessageLength;
+        gatheringMessages?: UIMessage[];
+      }
+    ): Promise<GenerateGroupChatResponse> => {
+      const settings = await getSettings();
+      const allCharacters = await listCharacters();
+      const byId = new Map(allCharacters.map((c) => [c.id, c]));
+      const characters: Character[] = [];
+      for (const id of payload.characterIds) {
+        const found = byId.get(id);
+        if (!found) {
+          return {
+            success: false,
+            error: `Character ${id} not found — it may have been deleted`,
+          };
+        }
+        characters.push(found.character);
+      }
+      const result = await generateGroupChat({
+        runId: payload.runId,
+        characters,
+        gatheringSummary: payload.gatheringSummary,
+        messageLength: payload.messageLength,
+        superAdmin: settings.superAdmin,
+        generationModel: settings.generationModel,
+        onEvent: emitProgress,
+      });
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error,
+          refusal: result.refusal,
+          usage: result.usage,
+          adminOverrideApplied: result.adminOverrideApplied,
+        };
+      }
+      const stored: StoredGroupChat = {
+        id: nanoid(),
+        createdAt: new Date().toISOString(),
+        groupChat: result.data,
+        characterIds: payload.characterIds,
+        messageLength: payload.messageLength,
+        gatheringSummary: payload.gatheringSummary,
+        gatheringMessages: payload.gatheringMessages,
+      };
+      await saveGroupChat(stored);
+      return {
+        success: true,
+        stored,
+        usage: result.usage,
+        adminOverrideApplied: result.adminOverrideApplied,
+      };
+    }
+  );
+
   ipcMain.handle(
     "chat:start",
     async (
@@ -1388,6 +1699,11 @@ export function registerIpc(window: BrowserWindow): void {
             character: StoredCharacter;
             initialUserMessage: string;
           }
+        | {
+            flow: "gather-group-chat";
+            characters: Character[];
+            initialUserMessage: string;
+          }
       ) & { sessionId?: string }
     ) => {
       try {
@@ -1411,6 +1727,11 @@ export function registerIpc(window: BrowserWindow): void {
             character: payload.character,
             existingScenes: payload.existingScenes,
             targetScene: payload.targetScene,
+          };
+        } else if (payload.flow === "gather-group-chat") {
+          gatherFlow = {
+            flow: "gather-group-chat",
+            characters: payload.characters,
           };
         } else {
           gatherFlow = { flow: "gather-regenerate", character: payload.character };
@@ -1499,6 +1820,14 @@ export function registerIpc(window: BrowserWindow): void {
             replayTranscript: string;
             newMessage: string;
           }
+        | {
+            sessionId?: string;
+            oldSessionId?: string;
+            flow: "gather-group-chat";
+            characters: Character[];
+            replayTranscript: string;
+            newMessage: string;
+          }
       )
     ) => {
       if (payload.oldSessionId) stopSession(payload.oldSessionId);
@@ -1523,6 +1852,11 @@ export function registerIpc(window: BrowserWindow): void {
             character: payload.character,
             existingScenes: payload.existingScenes,
             targetScene: payload.targetScene,
+          };
+        } else if (payload.flow === "gather-group-chat") {
+          gatherFlow = {
+            flow: "gather-group-chat",
+            characters: payload.characters,
           };
         } else {
           gatherFlow = { flow: "gather-regenerate", character: payload.character };

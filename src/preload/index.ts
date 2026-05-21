@@ -13,6 +13,7 @@ import type { Draft } from "@shared/drafts";
 import type {
   GenerateCharacterAllResponse,
   GenerateCharacterStepResponse,
+  GenerateGroupChatResponse,
   GenerateProgressEvent,
   GenerateScenesResponse,
   GenerateSingleSceneResponse,
@@ -24,11 +25,13 @@ import type {
   CharacterStepId,
   ConfirmedProfile,
   Difficulty,
+  GroupChat,
   ImageModel,
   Measurements,
   MessageLength,
   Scene,
   StoredCharacter,
+  StoredGroupChat,
 } from "@shared/schemas";
 
 import type { UpdateInfo } from "@shared/updates";
@@ -229,6 +232,72 @@ const api = {
     importFromPaths: (paths: string[]): Promise<ImportResponse> =>
       ipcRenderer.invoke("characters:importFromPaths", { paths }),
   },
+  groupChats: {
+    list: (): Promise<StoredGroupChat[]> =>
+      ipcRenderer.invoke("group-chats:list"),
+    get: (id: string): Promise<StoredGroupChat | null> =>
+      ipcRenderer.invoke("group-chats:get", id),
+    delete: (id: string): Promise<void> =>
+      ipcRenderer.invoke("group-chats:delete", id),
+    save: (payload: {
+      groupChat: GroupChat;
+      characterIds: string[];
+      messageLength: MessageLength;
+      gatheringSummary?: string;
+      gatheringMessages?: UIMessage[];
+    }): Promise<StoredGroupChat> =>
+      ipcRenderer.invoke("group-chats:save", payload),
+    updateField: (
+      id: string,
+      field: "title" | "publicDescription" | "scenario" | "privateDetails",
+      value: string
+    ): Promise<
+      | { success: true; stored: StoredGroupChat }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("group-chats:updateField", { id, field, value }),
+    updateGreetingMessage: (
+      id: string,
+      index: number,
+      message: string
+    ): Promise<
+      | { success: true; stored: StoredGroupChat }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("group-chats:updateGreetingMessage", {
+        id,
+        index,
+        message,
+      }),
+    generateGreeting: (
+      id: string,
+      speakerFirstName: string
+    ): Promise<
+      | { success: true; stored: StoredGroupChat }
+      | { success: false; error: string }
+    > =>
+      ipcRenderer.invoke("group-chats:generateGreeting", {
+        id,
+        speakerFirstName,
+      }),
+    deleteGreeting: (
+      id: string,
+      index: number
+    ): Promise<
+      | { success: true; stored: StoredGroupChat }
+      | { success: false; error: string }
+    > => ipcRenderer.invoke("group-chats:deleteGreeting", { id, index }),
+    updateGatheringMessages: (
+      id: string,
+      gatheringMessages: UIMessage[]
+    ): Promise<StoredGroupChat | null> =>
+      ipcRenderer.invoke("group-chats:updateGatheringMessages", {
+        id,
+        gatheringMessages,
+      }),
+    regenerate: (id: string): Promise<GenerateGroupChatResponse> =>
+      ipcRenderer.invoke("group-chats:regenerate", { id }),
+  },
   drafts: {
     save: (draft: Draft): Promise<Draft> =>
       ipcRenderer.invoke("drafts:save", draft),
@@ -315,6 +384,14 @@ const api = {
       imageModel?: ImageModel;
     }): Promise<GenerateSingleSceneResponse> =>
       ipcRenderer.invoke("generate:scene:single", payload),
+    groupChat: (payload: {
+      runId: string;
+      characterIds: string[];
+      gatheringSummary: string;
+      messageLength: MessageLength;
+      gatheringMessages?: UIMessage[];
+    }): Promise<GenerateGroupChatResponse> =>
+      ipcRenderer.invoke("generate:group-chat", payload),
     onProgress: (cb: (ev: GenerateProgressEvent) => void): (() => void) => {
       const listener = (_e: unknown, ev: GenerateProgressEvent) => cb(ev);
       ipcRenderer.on("generate:progress", listener);
@@ -371,6 +448,14 @@ const api = {
             oldSessionId?: string;
             flow: "gather-regenerate";
             character: StoredCharacter;
+            replayTranscript: string;
+            newMessage: string;
+          }
+        | {
+            sessionId?: string;
+            oldSessionId?: string;
+            flow: "gather-group-chat";
+            characters: Character[];
             replayTranscript: string;
             newMessage: string;
           }

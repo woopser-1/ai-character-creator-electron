@@ -1,4 +1,11 @@
-import { Maximize2, Minimize2, Minus, Plus, Settings, X } from "lucide-react";
+import {
+	Maximize2,
+	Minimize2,
+	Minus,
+	Plus,
+	Settings,
+	X,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { type CSSProperties, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,17 +19,26 @@ const NO_DRAG_STYLE = {
 	WebkitAppRegion: "no-drag",
 } as unknown as CSSProperties;
 
-type RailKey = "gallery" | "settings";
+type RailKey = "characters" | "group-chats" | "settings";
 
 export function NavHeader() {
 	const route = useRoute();
+	const inGroupChats =
+		route.name === "group-chats" ||
+		route.name === "group-chat" ||
+		route.name === "group-chats-create";
 	const railKey: RailKey | null =
 		route.name === "gallery"
-			? "gallery"
-			: route.name === "settings"
-				? "settings"
-				: null;
-	const createActive = route.name === "create";
+			? "characters"
+			: inGroupChats
+				? "group-chats"
+				: route.name === "settings"
+					? "settings"
+					: null;
+	const createActive =
+		route.name === "create" || route.name === "group-chats-create";
+	const createHref = inGroupChats ? "#/group-chats/create" : "#/create";
+	const createLabel = inGroupChats ? "New Group Chat" : "Create";
 
 	return (
 		<header
@@ -48,8 +64,11 @@ export function NavHeader() {
 				</a>
 				<div className="flex items-center gap-5" style={NO_DRAG_STYLE}>
 					<nav className="flex items-center gap-5">
-						<RailLink active={railKey === "gallery"} href="#/">
-							Gallery
+						<RailLink active={railKey === "characters"} href="#/">
+							Characters
+						</RailLink>
+						<RailLink active={railKey === "group-chats"} href="#/group-chats">
+							Group Chats
 						</RailLink>
 						<RailLink
 							active={railKey === "settings"}
@@ -61,7 +80,7 @@ export function NavHeader() {
 						</RailLink>
 					</nav>
 					<span aria-hidden className="h-3.5 w-px bg-[oklch(1_0_0_/_18%)]" />
-					<a className="relative" href="#/create">
+					<a className="relative" href={createHref}>
 						<Button
 							aria-current={createActive ? "page" : undefined}
 							className={cn(
@@ -71,7 +90,7 @@ export function NavHeader() {
 							size="sm"
 						>
 							<Plus className="mr-1 h-3.5 w-3.5" />
-							Create
+							{createLabel}
 						</Button>
 					</a>
 					{!isMac && <WindowControls />}
