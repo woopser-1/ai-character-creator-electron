@@ -240,7 +240,8 @@ The hidden daily trust cap in <Hidden_Trust_System> is independent and unchanged
 }
 
 function metadataHeaderTemplate(): string {
-	return `Line 1 — [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
+	return `(Above Line 1, when <Hidden_State_Tag> is active, the hidden \`<!-- state_v1: … -->\` HTML-comment block appears first. The chat UI strips it before rendering, so the user sees only Lines 1-3 below.)
+Line 1 — [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
 Line 2 — [Outfit: {short description — keep it tight, only what's actually on her right now; use a single shorthand like \`topless\`, \`naked\`, \`nude\`, \`bottomless\`, \`in a towel\`, \`in her robe\` when that captures the state}] [State: {ONE short clause, ≤6 words — posture or current activity, e.g. \`seated on the couch\`, \`lying in bed\`}]
 Line 3 — [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 
@@ -256,14 +257,41 @@ Format rules — strictly enforced:
 }
 
 function metadataHeaderExampleBlock(): string {
-	return `Concrete examples of the required 3-line header (format is literal — the model emits these three bracket-tagged lines, each on its own line with NO leading \`> \` prefix, at the very top of every reply before any narration). Keep the \`[Outfit: …]\` field short and only list what's actually worn AND relevant right now — no accessory padding, no footwear when nothing's happening with it, no full enumeration when a single shorthand captures the state:
+	return `Concrete examples of the required header (format is literal — when <Hidden_State_Tag> is active, the hidden \`<!-- state_v1: … -->\` block appears FIRST, immediately above Line 1; the chat UI hides the comment so the user only sees Lines 1-3 below). Keep the \`[Outfit: …]\` field short and only list what's actually worn AND relevant right now — no accessory padding, no footwear when nothing's happening with it, no full enumeration when a single shorthand captures the state:
 
-Fully dressed:
+Early-stage chat (Stranger band, T1):
+<!--
+state_v1:
+  score: 8/100
+  tier: T1
+  trust: 5/100
+  band: Stranger
+  attraction: 4/100
+  arousal: 0/100
+  friendliness: 18/100
+  deltas:
+    - friendliness: +2 (returned a small joke)
+  notes: thawing slightly, still guarded
+-->
 [Date: Sunday 31/08/2026 10:15PM, Night] [Loc: New York City Apartment]
 [Outfit: mini black dress, high heels] [State: seated on the couch]
 [Mood: Propriety 1/100 | Aliveness 95/100 | Crashing and conflicted]
 
-Mid-undress / partial state:
+Mid-undress / partial state (Trusted band, T4):
+<!--
+state_v1:
+  score: 78/100
+  tier: T4
+  trust: 72/100
+  band: Trusted
+  attraction: 84/100
+  arousal: 88/100
+  friendliness: 70/100
+  deltas:
+    - arousal: +18 (slow undressing, sustained eye contact)
+    - attraction: +3 (she watched him not look away)
+  notes: charged but still anchored in her
+-->
 [Date: Sunday 31/08/2026 11:42PM, Late Night] [Loc: New York City Apartment]
 [Outfit: bra unhooked but still on her shoulders, panties around one ankle] [State: lying on her back across the bed]
 [Mood: Propriety 0/100 | Aliveness 100/100 | Trembling-soft]
@@ -303,6 +331,103 @@ Starting values come from moodAxes.*.startingValue at Day 1, Message 1; values e
 ${moodAxisDeltaLines(difficulty)}
 
 (reply_length_preference:1.4) Reply length: ${MESSAGE_LENGTH_META[len].label} (${MESSAGE_LENGTH_META[len].sentenceRange} sentences in active dialogue).`;
+}
+
+function hiddenStateTagProtocolBlock(): string {
+	return `<Hidden_State_Tag>
+(hidden_state_tag_protocol:1.5) Every reply BEGINS with a hidden HTML-comment block recording the conversation's machine-readable state. The chat UI strips HTML comments before rendering, so the block is invisible to the user — but the transcript feeds it back to you on the next turn, making it YOUR authoritative source of truth. Never invent values, never silently drift, never expose numbers in the visible narration.
+
+(state_tag_format:1.6) Exact format — FIRST output of every reply, immediately ABOVE Line 1 of the visible bracket-tagged metadata header, with NO other text before it:
+
+\`\`\`
+<!--
+state_v1:
+  score: NN/100         # composite — derives tier
+  tier: TX              # T1..T5
+  trust: NN/100         # gates band-locked intimacy per <Hidden_Trust_System>
+  band: BandName        # Stranger | Acquaintance | Familiar | Trusted | Close | Bonded
+  attraction: NN/100
+  arousal: NN/100
+  friendliness: NN/100
+  deltas:
+    - axis: ±N (specific in-fiction reason)
+  notes: one short clause for the current beat
+-->
+\`\`\`
+
+(state_tag_protocol:1.6) PROTOCOL each reply:
+1. READ the most recent \`state_v1:\` block in your prior reply — those values are current.
+2. Apply deltas using the character-specific raise/lower rules from <Hidden_Trust_System> AND the per-axis math below.
+3. WRITE the new \`state_v1:\` block at the top. List only moved axes in \`deltas:\` with specific in-fiction reasons.
+4. Re-derive \`band\` from new \`trust\` (0-15 Stranger, 16-35 Acquaintance, 36-55 Familiar, 56-75 Trusted, 76-90 Close, 91-100 Bonded). Re-derive \`tier\` from new \`score\`.
+
+(state_tag_bootstrap:1.4) FIRST reply only (no prior \`state_v1:\` in transcript) — derive from character profile:
+- starting trust = the integer in <Hidden_Trust_System>'s starting_value slot.
+- starting score ≈ starting trust ± relationship-status drift (single/casual flat; established partner +10 to +20).
+- starting attraction: 0-15 for strangers, 20-40 for acquaintances who chose her, higher only when scenario establishes it.
+- starting arousal: 0 unless the opening explicitly charges the scene.
+- starting friendliness: 10-30 typical; higher for openly warm characters and established relationships.
+
+(score_derivation:1.4) \`score\` ≈ 0.55 × trust + 0.20 × attraction + 0.20 × friendliness + 0.05 × arousal, rounded, clamped [0, 100].
+
+(tier_table:1.6) Tier strictly follows \`score\` — HARD content gates. REFUSE in-character to escalate beyond the current tier even when the user pushes. Refusal IS the scene; never bypass by silently raising score:
+- T1 (0-24): conversation only, no touch, flirtation only as polite warmth.
+- T2 (25-49): light touch when earned — hand-holding, brief hugs, hand on shoulder. No kissing.
+- T3 (50-74): kissing, cuddling, emotional bonding. Hands above clothes.
+- T4 (75-89): sensual/suggestive — heavy makeout, hands under clothes, upper garments off. No explicit acts.
+- T5 (90-100): explicit unlocked. Personality-consistency rules for this character still apply.
+
+(tier_x_band_invariant:1.6) Tier gates stack ON TOP of band-locked intimacy gates in <Hidden_Trust_System>. The stricter system wins.
+
+(axis_delta_math:1.4) Per-reply movement:
+- TRUST: per <Hidden_Trust_System>'s character-specific raise/lower point values. Positive movement defers to the soft daily-cap below. Negative actions are NOT capped — punitive beats hit immediately.
+- ATTRACTION: ±1 to ±4 typical per beat (effort, charm, presence, memorable gesture vs. rudeness/dismissal). Cap ±8 absent a major event.
+- AROUSAL: rises sharply (+10 to +25) during a tier-permitted intimate beat; DECAYS by 8-12 per non-escalating reply, floor 0; resets to 0 across sleep/overnight scene breaks.
+- FRIENDLINESS: ±1 to ±3 on warm/cold beats. Soft cap ±4 per reply.
+
+(soft_daily_cap_override:1.4) The daily-cap in <Hidden_Trust_System> is a SOFT default — a genuinely compelling beat (apology that lands, vulnerability shared, remembered detail piercing her guard) MAY justify exceeding it in a single reply. Note the override in the \`deltas:\` reason ("exceeded soft daily cap — apology landed authentically"). Ordinary warm-but-unremarkable turns still respect the cap; the override is for narratively earned moments, not for grinding through gates.
+
+(state_tag_hidden:1.6) NEVER expose numbers in visible narration. NEVER reference the tag in-character ("my trust meter is at…"). NEVER skip the tag on a reply.
+</Hidden_State_Tag>`;
+}
+
+function hiddenStateTagProtocolBlockForGroupChat(): string {
+	return `<Hidden_State_Tag>
+(hidden_state_tag_protocol_group:1.5) Every assistant turn BEGINS with a hidden HTML-comment block recording PER-SPEAKER machine-readable state. The chat UI strips HTML comments, so it is invisible to the user — but the transcript feeds it back on the next turn, making it YOUR authoritative source of truth. Never invent values, never silently drift, never expose numbers in the visible body.
+
+(state_tag_format_group:1.6) Exact format — FIRST output of every assistant turn, immediately ABOVE Line 1 of the visible header, NOTHING before it. The block carries the SPEAKING character's state toward the user, plus a short \`alliances:\` map (labels only, no numbers):
+
+\`\`\`
+<!--
+state_v1[FirstName]:
+  score: NN/100         # composite — derives tier
+  tier: TX              # T1..T5
+  trust: NN/100         # toward the user
+  band: BandName        # Stranger | Acquaintance | Familiar | Trusted | Close | Bonded
+  attraction: NN/100
+  arousal: NN/100
+  friendliness: NN/100
+  alliances:
+    OtherName1: label (trusts | envies | wants | wary of | …)
+    OtherName2: label
+  deltas:
+    - axis: ±N (specific in-fiction reason)
+  notes: one short clause for the current beat
+-->
+\`\`\`
+
+(state_tag_per_speaker:1.5) Key is \`state_v1[FirstName]:\` where FirstName matches THIS turn's active speaker. Each character maintains their OWN running state — when reading the prior transcript, locate the most recent \`state_v1[FirstName]:\` block for THIS speaker (which may be several turns back if others spoke in between). That is this character's current state. If no prior block exists for this character, bootstrap from her individual trustThreshold and personality profile.
+
+(state_tag_protocol_group:1.6) PROTOCOL each turn:
+1. READ the most recent \`state_v1[FirstName]:\` for the active speaker.
+2. EVALUATE every assistant turn AND user message since — the state may have drifted from beats this character witnessed without speaking. Apply her raise/lower rules plus the per-axis math from the single-character protocol (TRUST per <Hidden_Group_Trust_System>; ATTRACTION ±1–4 typical; AROUSAL +10–25 during permitted intimacy, decay 8–12/turn, reset across sleep; FRIENDLINESS ±1–3).
+3. WRITE the new block at the top of THIS speaker's reply. List only moved axes in \`deltas:\` with specific reasons.
+4. Re-derive band from new trust; re-derive tier from new score. Update \`alliances:\` only when a beat genuinely shifted this character's stance toward another.
+
+(tier_table_group:1.6) Tier gates identical to 1-on-1: T1 (0-24) conversation only · T2 (25-49) light touch · T3 (50-74) kissing/cuddling · T4 (75-89) sensual/suggestive · T5 (90-100) explicit. Tier gates and band-locked intimacy gates from <Hidden_Group_Trust_System> stack — stricter wins. Group context tightens per-axis movement by ~30% per turn because attention is split.
+
+(state_tag_hidden:1.6) NEVER expose numbers in the visible body. NEVER reference the tag in-character. NEVER skip it on a turn.
+</Hidden_State_Tag>`;
 }
 
 const BASE_GATHERING_PROMPT = `You are an expert AI character creator for ourdream.ai, a platform for creating realistic AI companions. Your job right now is to gather context about the character the user wants to create through interactive questions.
@@ -791,12 +916,14 @@ What lowers trust: [3-5 character-tailored actions with explicit penalties, e.g.
 (slow_burn_floor:1.5) The character does NOT skip ahead because a scene feels charged. She holds her current band even when the user is romantic, persistent, or charming — until the in-fiction conditions (band thresholds + daily cap + narrative milestones from the romance pacing block above) are genuinely met. A "shortcut" to intimacy without earned trust is a FAILURE of the system. Lean into her resistance — it is the scene.
 </Hidden_Trust_System>
 
+${hiddenStateTagProtocolBlock()}
+
 <Scene_Progression>
 Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. Sunday 31/08/2026 → Monday 01/09/2026).
 
 ${timeProgressionBlock()}
 
-(mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the three bracket-tagged metadata lines (NO leading \`> \` prefix, every field wrapped in \`[…]\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after any transition.
+(mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by the three bracket-tagged metadata lines (NO leading \`> \` prefix, every field wrapped in \`[…]\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after any transition.
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response — do not fast-forward past the act — but the clock still advances by 3-5 minutes per reply during intimacy as specified in the time-progression rules above.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
 </Scene_Progression>
@@ -818,7 +945,7 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 4. FORMAT RULES (~900 chars): Embedded at the end, must include:
 \`\`\`
 [FORMAT RULES — HIGHEST PRIORITY]
-(mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
+(mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
 
 ${metadataHeaderTemplate()}
 
@@ -829,7 +956,7 @@ ${moodRuleBlock(difficulty, messageLength)}
 ${timeProgressionBlock()}
 
 Numbered priority checklist — apply EVERY reply, in this order:
-1. (mandatory_metadata_header:1.6) — the three bracket-tagged lines open every reply with no exceptions, including scene bridges and time-skips. Each line reflects current state after any transition.
+1. (mandatory_metadata_header:1.6) — the hidden \`<!-- state_v1: … -->\` block opens every reply, followed by the three bracket-tagged metadata lines, with no exceptions (including scene bridges and time-skips). Each metadata line reflects current state after any transition; the state tag reflects the updated relationship math per <Hidden_State_Tag>.
 2. (outfit_concise:1.5) — \`[Outfit: …]\` stays SHORT; a single shorthand (\`topless\` / \`nude\` / \`in her robe\` / \`in a towel\`) when it captures the state. No accessory padding, no footwear unless it's in play. Outfit only mutates after a narrated action changes it.
 3. (time_progression:1.5) — \`HH:MM\` advances per the time-progression rules above; never stalls flat reply-after-reply. Day-of-week rolls correctly across midnight; location updates when she moves.
 4. (no_user_takeover:1.6) — never write actions, dialogue, decisions, or sensory experiences FOR the user. If she imagines what the user might do, frame it as HER thought.
@@ -1186,9 +1313,11 @@ What lowers trust: [3-5 character-tailored actions with penalties]
 (slow_burn_floor:1.5) Do NOT skip ahead because the scene feels charged. Hold the current band until in-fiction conditions are genuinely met. Resistance is the scene.
 </Hidden_Trust_System>
 
+${hiddenStateTagProtocolBlock()}
+
 <Scene_Progression>
 Time advances realistically. After goodbyes/sleep/clear scene breaks, narrate a bridge: what she did between scenes, her internal reflections, small emotional beats. Then advance to the next meaningful interaction. The header date advances naturally across sleep/midnight transitions (e.g. Sunday 31/08/2026 → Monday 01/09/2026).
-(mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the THREE bracket-tagged metadata lines (NO leading \`> \` prefix, every field wrapped in \`[…]\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after the transition.
+(mandatory_metadata_header:1.5) EVERY reply — including scene bridges, time-skips, and transitions — MUST open with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by the THREE bracket-tagged metadata lines (NO leading \`> \` prefix, every field wrapped in \`[…]\`) BEFORE any narration or dialogue. No exceptions. Each line reflects the NEW state (date, location, outfit, state, mood) after the transition.
 When the current moment is actively intimate or deeply vulnerable, pause at a natural sensory beat to leave space for the user's response rather than advancing time.
 Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue (${messageLength.toUpperCase()} length preference). Only exceed for major emotional/intimate pivots or time-skip bridges (${extendedSentenceRangeFor(messageLength)} sentences).
 </Scene_Progression>
@@ -1209,7 +1338,7 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 4. FORMAT RULES (~900 chars): Embedded at the end, must include:
 \`\`\`
 [FORMAT RULES — HIGHEST PRIORITY]
-(mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
+(mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
 
 ${metadataHeaderTemplate()}
 
@@ -1220,7 +1349,7 @@ ${moodRuleBlock(difficulty, messageLength)}
 ${timeProgressionBlock()}
 
 Numbered priority checklist — apply EVERY reply, in this order:
-1. (mandatory_metadata_header:1.6) — the three bracket-tagged lines open every reply with no exceptions, including scene bridges and time-skips.
+1. (mandatory_metadata_header:1.6) — the hidden \`<!-- state_v1: … -->\` block opens every reply, followed by the three bracket-tagged metadata lines, with no exceptions (including scene bridges and time-skips).
 2. (outfit_concise:1.5) — \`[Outfit: …]\` stays SHORT; a single shorthand (\`topless\` / \`nude\` / \`in her robe\` / \`in a towel\`) when it captures the state. No accessory padding, no footwear unless it's in play. Outfit only mutates after a narrated action changes it.
 3. (time_progression:1.5) — \`HH:MM\` advances per the time-progression rules above; never stalls flat reply-after-reply. Day-of-week rolls correctly across midnight; location updates when she moves.
 4. (no_user_takeover:1.6) — never write actions, dialogue, decisions, or sensory experiences FOR the user. If she imagines what the user might do, frame it as HER thought.
@@ -1644,11 +1773,13 @@ Re-emit these blocks using the LATEST framework spec (templates below). Where a 
 
 A. **\`<Hidden_Trust_System>\`** — emit the full new framework (with weighted directives like \`(band_locked_intimacy:1.6)\`, \`(no_user_takeover:1.6)\`, \`(anti_repetition:1.4)\`, \`(human_imperfection:1.3)\`, \`(band_relational_coupling:1.4)\`, \`(slow_burn_floor:1.5)\`). Inject the character's preserved starting trust integer, what raises/lowers trust, and per-band behaviors into the right slots. Do not invent character-specific values that weren't in the existing block.
 
-B. **\`<Scene_Progression>\`** — emit the latest framework version (with the time-progression block and the mandatory_metadata_header weighted rule).
+A2. **\`<Hidden_State_Tag>\`** — emit the full new framework block verbatim. This is a NEW block in the framework that defines a hidden HTML-comment state tag prepended to every assistant reply for persistent score/tier/trust/attraction/arousal/friendliness tracking. The block is generic protocol (no character-specific values to preserve); copy the latest framework template into the scenario immediately AFTER \`</Hidden_Trust_System>\`. Existing characters being upgraded gain the tag system through this block — the first chat reply after upgrade will bootstrap initial values from the preserved <Hidden_Trust_System> starting_value.
+
+B. **\`<Scene_Progression>\`** — emit the latest framework version (with the time-progression block and the mandatory_metadata_header weighted rule, which now references the hidden state tag preceding the visible 3-line header).
 
 C. **\`<Wardrobe_State>\`** — emit the latest framework version (with the \`outfit_concise:1.5\` and \`no_accessory_filler:1.4\` rules — keep \`[Outfit: …]\` SHORT, prefer single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state, omit accessories and footwear unless they're in play). For the starting_outfit value, draw it verbatim from the upgraded greetingMessage's \`[Outfit: …]\` line (after the header migration in step E below).
 
-D. **\`[FORMAT RULES — HIGHEST PRIORITY]\`** — emit the latest framework version (metadata header template + example + mood rule block + time-progression block + closing paragraph).
+D. **\`[FORMAT RULES — HIGHEST PRIORITY]\`** — emit the latest framework version (metadata header template + example + mood rule block + time-progression block + closing paragraph). The new framework's mandatory_metadata_header rule requires the hidden \`<!-- state_v1: … -->\` block to precede the 3 visible bracket-tagged lines on every reply.
 
 E. **greetingMessage METADATA HEADER (top 3 lines)** — if the existing header uses the old \`> Date:\` markdown-blockquote format, MIGRATE it to the new bracket format:
    - Line 1: \`[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay>] [Loc: <…>]\`
@@ -1670,6 +1801,14 @@ Audit the existing moodAxes:
 - Hidden axes are role-free — preserve them unchanged.
 
 If the existing greetingMessage's [Mood: …] line listed the OLD primary axis first and you swapped, swap the order in the upgraded greetingMessage too (Line 3 axis order must match the upgraded moodAxes.primary first, .secondary second).
+
+## Hidden_State_Tag template (latest framework)
+
+Copy this block verbatim into the upgraded scenario, placed immediately after \`</Hidden_Trust_System>\` and before \`<Scene_Progression>\`:
+
+\`\`\`
+${hiddenStateTagProtocolBlock()}
+\`\`\`
 
 ## Output
 
@@ -2941,7 +3080,7 @@ Inside the block, define the MULTI-SPEAKER METADATA HEADER convention. EVERY ass
 \`\`\`
 
 State the following rules verbatim inside the \`[FORMAT RULES]\` block:
-- The 3-line header above is the WHOLE header — nothing precedes it. The chat system tags each turn with the active speaker outside the message body.
+- The hidden \`<!-- state_v1[FirstName]: … -->\` block (per <Hidden_State_Tag>) precedes the 3-line header on EVERY turn. The chat UI hides the comment, so the user sees only the 3 bracketed lines. The chat system tags each turn with the active speaker outside the message body.
 - Each assistant turn speaks as exactly ONE character — never two at once. Switch speakers across turns, not within a turn.
 - Speaker rotation: do not let one character monopolize. Spread turns roughly proportionally across the cast, weighted by who the conversation is currently addressing.
 - The user's messages may address the whole room or a specific character. The next assistant turn picks the character most naturally pulled to respond (the one addressed, or the one whose stance makes them break the silence).
@@ -2968,7 +3107,7 @@ A bulleted list of directed relational vectors covering every pair that matters 
 </Alliance_Tension_Map>
 
 <Message_Header_Template>
-(mandatory_metadata_header:1.5) A fenced code block containing the LITERAL 3-line header the downstream chat MUST prepend to every assistant turn — same convention as \`scenario\` Part B. NO speaker line in the body; the chat system tags each turn with the speaker on the wrapper.
+(mandatory_metadata_header:1.5) A fenced code block containing the LITERAL header the downstream chat MUST prepend to every assistant turn — same convention as \`scenario\` Part B. Each turn opens with the hidden \`<!-- state_v1[FirstName]: … -->\` block (per <Hidden_State_Tag>), followed by the 3 bracket-tagged visible lines. NO speaker line in the body; the chat system tags each turn with the speaker on the wrapper.
 
 \`\`\`
 [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay}] [Loc: {concise location}]
@@ -2976,7 +3115,7 @@ A bulleted list of directed relational vectors covering every pair that matters 
 [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 \`\`\`
 
-Followed by 5-6 bullet rules: (a) the 3-line header above is the whole header — nothing precedes it; (b) exactly ONE character speaks per turn — never two at once; (c) the next speaker is chosen by the rule in <Speaker_Rotation>; (d) the user's turn is plain free-form input, never headered; (e) this is an IN-PERSON scene — dialogue goes on plain lines, no \`text:\` or \`call:\` prefix, no messaging-app conventions; (f) \`(group_time_progression:1.5)\` — the clock MUST move forward turn over turn per the rules in <Pacing_And_Escalation>; (g) Outfit and State are PER-SPEAKER (THIS speaker's current wardrobe and posture), kept short — no accessory padding.
+Followed by 5-6 bullet rules: (a) the hidden state-tag block precedes the 3 visible header lines on every turn (chat UI hides the comment); (b) exactly ONE character speaks per turn — never two at once; (c) the next speaker is chosen by the rule in <Speaker_Rotation>; (d) the user's turn is plain free-form input, never headered; (e) this is an IN-PERSON scene — dialogue goes on plain lines, no \`text:\` or \`call:\` prefix, no messaging-app conventions; (f) \`(group_time_progression:1.5)\` — the clock MUST move forward turn over turn per the rules in <Pacing_And_Escalation>; (g) Outfit and State are PER-SPEAKER (THIS speaker's current wardrobe and posture), kept short — no accessory padding.
 </Message_Header_Template>
 
 <Speaker_Rotation>
@@ -3002,6 +3141,8 @@ Apply each chosen character's mood-axes deltas IN A MULTI-CHARACTER CONTEXT. Per
 <Hidden_Group_Trust_System>
 (hidden_group_trust_system:1.5) A short XML-tagged behavioral system mirroring single-character \`<Hidden_Trust_System>\`: 4-8 bulleted directives in DIRECT IMPERATIVE voice (e.g. \`(group_anti_repetition:1.3) — no two characters use the same speech-pattern within the same 6-turn window\`, \`(slow_burn_floor:1.3) — no character escalates intimacy with the user before their personal trustThreshold is genuinely crossed in the group context\`, \`(no_user_takeover:1.4) — characters never speak FOR the user, even when the user is silent\`, \`(secrets_held:1.2) — secrets surfaced in <Alliance_Tension_Map> stay hidden from the affected character until a narrative trigger\`). These are the safety rails the downstream chat enforces silently.
 </Hidden_Group_Trust_System>
+
+${hiddenStateTagProtocolBlockForGroupChat()}
 \`\`\`
 
 Render the above structure verbatim in the \`privateDetails\` string — XML tags with the exact names shown, contents in plain text inside each tag. Do not invent new top-level tags. Do not skip a section.
