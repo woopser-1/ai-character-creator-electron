@@ -3,6 +3,7 @@ import type {
   ExportResponse,
   ImportResponse,
 } from "@shared/character-port";
+import type { GroupChatImportResponse } from "@shared/group-chat-port";
 import type {
   AgentStreamEvent,
   StartChatPayload,
@@ -297,6 +298,12 @@ const api = {
       }),
     regenerate: (id: string): Promise<GenerateGroupChatResponse> =>
       ipcRenderer.invoke("group-chats:regenerate", { id }),
+    exportToFile: (ids: string[]): Promise<ExportResponse> =>
+      ipcRenderer.invoke("group-chats:export", { ids }),
+    importFromFile: (): Promise<GroupChatImportResponse> =>
+      ipcRenderer.invoke("group-chats:import"),
+    importFromPaths: (paths: string[]): Promise<GroupChatImportResponse> =>
+      ipcRenderer.invoke("group-chats:importFromPaths", { paths }),
   },
   drafts: {
     save: (draft: Draft): Promise<Draft> =>
@@ -312,6 +319,8 @@ const api = {
   shell: {
     showInFolder: (path: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke("shell:showInFolder", path),
+    openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke("shell:openExternal", url),
   },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),

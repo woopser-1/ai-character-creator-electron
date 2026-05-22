@@ -7,6 +7,10 @@ export type {
 	ImportResponse,
 	PortableCharacter,
 } from "@shared/character-port";
+export type {
+	GroupChatImportResponse,
+	PortableGroupChat,
+} from "@shared/group-chat-port";
 
 export const IMAGE_MODEL_META: Record<
 	ImageModel,

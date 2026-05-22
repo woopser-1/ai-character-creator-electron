@@ -1,9 +1,11 @@
 import {
+	ExternalLink,
 	Maximize2,
 	Minimize2,
 	Minus,
 	Plus,
 	Settings,
+	Sparkles,
 	X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -18,6 +20,8 @@ const DRAG_STYLE = { WebkitAppRegion: "drag" } as unknown as CSSProperties;
 const NO_DRAG_STYLE = {
 	WebkitAppRegion: "no-drag",
 } as unknown as CSSProperties;
+
+const OURDREAM_REFERRAL_URL = "https://ourdream.ai/refer/RZ77V1";
 
 type RailKey = "characters" | "group-chats" | "settings";
 
@@ -80,6 +84,7 @@ export function NavHeader() {
 						</RailLink>
 					</nav>
 					<span aria-hidden className="h-3.5 w-px bg-[oklch(1_0_0_/_18%)]" />
+					<ReferralPill />
 					<a className="relative" href={createHref}>
 						<Button
 							aria-current={createActive ? "page" : undefined}
@@ -134,6 +139,32 @@ function RailLink({ href, active, iconOnly, children }: RailLinkProps) {
 				)}
 			</span>
 		</a>
+	);
+}
+
+function ReferralPill() {
+	return (
+		<button
+			aria-label="Open OurDream referral link in browser"
+			className={cn(
+				"group/ref flex h-7 items-center gap-1.5 rounded-full border border-primary/45 bg-primary/10 px-3 font-medium text-[0.75rem] text-primary outline-none transition-all duration-200 ease-out",
+				"glow-xs hover:glow-sm hover:border-primary/65 hover:bg-primary/15 hover:text-primary-foreground",
+				"focus-visible:ring-3 focus-visible:ring-ring/45",
+			)}
+			onClick={() => void window.api.shell.openExternal(OURDREAM_REFERRAL_URL)}
+			title="Open ourdream.ai with referral credit"
+			type="button"
+		>
+			<Sparkles
+				aria-hidden
+				className="h-3 w-3 text-primary transition-transform duration-300 group-hover/ref:rotate-12"
+			/>
+			<span className="-tracking-[0.005em]">Try OurDream</span>
+			<ExternalLink
+				aria-hidden
+				className="h-3 w-3 opacity-70 transition-opacity duration-200 group-hover/ref:opacity-100"
+			/>
+		</button>
 	);
 }
 

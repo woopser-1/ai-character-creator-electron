@@ -315,7 +315,7 @@ function EditPanel({
 // Editorial section header: small mono section number, headline, hairline rule.
 // Replaces the previous icon-in-rounded-square + card-wrapped pattern. The
 // section content sits open beneath, free of card chrome.
-function Section({
+export function Section({
 	index,
 	title,
 	subtitle,
@@ -718,7 +718,7 @@ function LinkedGroupChats({
 	);
 }
 
-function DefItem({
+export function DefItem({
 	label,
 	value,
 	muted,

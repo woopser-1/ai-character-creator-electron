@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ClaudeStatusBanner } from "@/components/claude-status-banner";
 import { FilesSheetProvider } from "@/components/files-sheet";
+import { GroupChatsFilesSheetProvider } from "@/components/group-chats-files-sheet";
 import { NavHeader } from "@/components/nav-header";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,7 +23,9 @@ export function App() {
 			<ToastProvider>
 				<ChromeProvider>
 					<FilesSheetProvider>
-						<AppShell />
+						<GroupChatsFilesSheetProvider>
+							<AppShell />
+						</GroupChatsFilesSheetProvider>
 					</FilesSheetProvider>
 				</ChromeProvider>
 			</ToastProvider>

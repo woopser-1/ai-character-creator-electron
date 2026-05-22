@@ -7,11 +7,18 @@ import {
   CHARACTER_BUNDLE_KIND,
   CHARACTER_PORT_KIND,
   CHARACTER_PORT_VERSION,
-  type ExportResponse,
-  type ImportFileOutcome,
   type ImportResponse,
   type PortableCharacter,
 } from "@shared/character-port";
+import {
+  anyGroupChatPortFileSchema,
+  GROUP_CHAT_BUNDLE_KIND,
+  GROUP_CHAT_PORT_KIND,
+  GROUP_CHAT_PORT_VERSION,
+  type GroupChatImportResponse,
+  type PortableGroupChat,
+} from "@shared/group-chat-port";
+import type { ExportResponse, ImportFileOutcome } from "@shared/port-shared";
 import type { UIMessage } from "@shared/chat";
 import type { Draft } from "@shared/drafts";
 import type {
@@ -80,8 +87,10 @@ import {
   deleteGroupChat,
   deleteGroupChatGreeting,
   getGroupChat,
+  importPortableGroupChats,
   listGroupChats,
   saveGroupChat,
+  toPortableGroupChat,
   updateGroupChatField,
   updateGroupChatGatheringMessages,
   updateGroupChatGreetingMessage,
@@ -114,6 +123,12 @@ function characterFilename(c: PortableCharacter): string {
   const stamp = new Date().toISOString().slice(0, 10);
   const slug = last ? `${first}-${last}` : first;
   return `${slug}-${stamp}.character.json`;
+}
+
+function groupChatFilename(g: PortableGroupChat): string {
+  const titleSlug = safeFilenameSegment(g.groupChat.title, "group-chat");
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `${titleSlug}-${stamp}.group-chat.json`;
 }
 
 function withConfirmedMeasurements(
@@ -356,6 +371,26 @@ export function registerIpc(window: BrowserWindow): void {
         return { ok: true };
       } catch {
         return { ok: false };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "shell:openExternal",
+    async (_event, url: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        // Only allow http(s) — refuse file://, javascript:, etc.
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return { ok: false, error: `Refused protocol: ${parsed.protocol}` };
+        }
+        await shell.openExternal(url);
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
     }
   );
@@ -1388,6 +1423,198 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle("group-chats:delete", async (_event, id: string) => {
     await deleteGroupChat(id);
   });
+
+  ipcMain.handle(
+    "group-chats:export",
+    async (
+      _event,
+      payload: { ids: string[] }
+    ): Promise<ExportResponse> => {
+      if (!payload.ids || payload.ids.length === 0) {
+        return { success: false, error: "No group chats selected for export" };
+      }
+
+      const [allGroupChats, allCharacters] = await Promise.all([
+        listGroupChats(),
+        listCharacters(),
+      ]);
+      const gcById = new Map(allGroupChats.map((g) => [g.id, g]));
+      const charById = new Map(allCharacters.map((c) => [c.id, c]));
+
+      const selected = payload.ids
+        .map((id) => gcById.get(id))
+        .filter((g): g is NonNullable<typeof g> => Boolean(g));
+
+      if (selected.length === 0) {
+        return { success: false, error: "Selected group chats not found" };
+      }
+
+      // Build portable group chats with embedded cast snapshots. If any cast
+      // character is missing locally, bail with a precise error.
+      const portables: PortableGroupChat[] = [];
+      for (const gc of selected) {
+        const castPortables: PortableCharacter[] = [];
+        for (const cid of gc.characterIds) {
+          const c = charById.get(cid);
+          if (!c) {
+            return {
+              success: false,
+              error: `Group chat "${gc.groupChat.title}" references a missing character (${cid}). Restore the character before exporting.`,
+            };
+          }
+          castPortables.push(toPortableCharacter(c));
+        }
+        portables.push(toPortableGroupChat(gc, castPortables));
+      }
+
+      const isSingle = portables.length === 1;
+      const stamp = new Date().toISOString().slice(0, 10);
+      const defaultName =
+        isSingle && portables[0]
+          ? groupChatFilename(portables[0])
+          : `group-chats-${stamp}.bundle.json`;
+
+      const result = await dialog.showSaveDialog(window, {
+        title: isSingle
+          ? "Export group chat"
+          : `Export ${portables.length} group chats`,
+        defaultPath: defaultName,
+        filters: [{ name: "Group Chat JSON", extensions: ["json"] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const exportedAt = new Date().toISOString();
+      const file = isSingle && portables[0]
+        ? {
+            kind: GROUP_CHAT_PORT_KIND,
+            version: GROUP_CHAT_PORT_VERSION,
+            exportedAt,
+            app: APP_TAG,
+            groupChat: portables[0],
+          }
+        : {
+            kind: GROUP_CHAT_BUNDLE_KIND,
+            version: GROUP_CHAT_PORT_VERSION,
+            exportedAt,
+            app: APP_TAG,
+            groupChats: portables,
+          };
+
+      try {
+        await fs.writeFile(
+          result.filePath,
+          `${JSON.stringify(file, null, 2)}\n`,
+          "utf-8"
+        );
+        return { success: true, path: result.filePath, count: portables.length };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+  );
+
+  async function readGroupChatPortablesFromPaths(paths: string[]): Promise<{
+    portables: PortableGroupChat[];
+    fileOutcomes: ImportFileOutcome[];
+  }> {
+    const portables: PortableGroupChat[] = [];
+    const fileOutcomes: ImportFileOutcome[] = [];
+
+    for (const filePath of paths) {
+      const fileName = basename(filePath);
+      try {
+        const raw = await fs.readFile(filePath, "utf-8");
+        const json = JSON.parse(raw);
+        const parsed = anyGroupChatPortFileSchema.safeParse(json);
+        if (!parsed.success) {
+          fileOutcomes.push({
+            fileName,
+            ok: false,
+            error:
+              parsed.error.issues[0]?.message ?? "Invalid group chat file",
+          });
+          continue;
+        }
+        const fileGroupChats =
+          parsed.data.kind === GROUP_CHAT_PORT_KIND
+            ? [parsed.data.groupChat]
+            : parsed.data.groupChats;
+        portables.push(...fileGroupChats);
+        fileOutcomes.push({
+          fileName,
+          ok: true,
+          count: fileGroupChats.length,
+        });
+      } catch (error) {
+        fileOutcomes.push({
+          fileName,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { portables, fileOutcomes };
+  }
+
+  async function runGroupChatImport(
+    paths: string[]
+  ): Promise<GroupChatImportResponse> {
+    const { portables, fileOutcomes } =
+      await readGroupChatPortablesFromPaths(paths);
+
+    if (portables.length === 0) {
+      return {
+        success: false,
+        error:
+          fileOutcomes.find((o) => !o.ok)?.error ??
+          "No group chats found in the selected files",
+        fileOutcomes,
+      };
+    }
+
+    const imported = await importPortableGroupChats(portables);
+    return { success: true, imported, fileOutcomes };
+  }
+
+  ipcMain.handle(
+    "group-chats:import",
+    async (): Promise<GroupChatImportResponse> => {
+      const result = await dialog.showOpenDialog(window, {
+        title: "Import group chats",
+        properties: ["openFile", "multiSelections"],
+        filters: [
+          { name: "Group Chat JSON", extensions: ["json"] },
+          { name: "All files", extensions: ["*"] },
+        ],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      return runGroupChatImport(result.filePaths);
+    }
+  );
+
+  ipcMain.handle(
+    "group-chats:importFromPaths",
+    async (
+      _event,
+      payload: { paths: string[] }
+    ): Promise<GroupChatImportResponse> => {
+      if (!payload.paths || payload.paths.length === 0) {
+        return { success: false, error: "No files supplied" };
+      }
+      return runGroupChatImport(payload.paths);
+    }
+  );
 
   ipcMain.handle(
     "group-chats:save",

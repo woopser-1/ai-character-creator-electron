@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { type ImportFileOutcome, PORT_FILE_VERSION } from "./port-shared";
 import { characterSchema, confirmedProfileSchema, sceneSchema } from "./schemas";
 
 export const CHARACTER_PORT_KIND = "ai-character-creator/character" as const;
 export const CHARACTER_BUNDLE_KIND =
 	"ai-character-creator/character-bundle" as const;
-export const CHARACTER_PORT_VERSION = 1 as const;
+export const CHARACTER_PORT_VERSION = PORT_FILE_VERSION;
 
 // A single character payload stripped of identity fields (id, createdAt). On
 // import we mint a fresh id and timestamp so the file is a portable recipe,
@@ -59,12 +60,8 @@ export const anyCharacterPortFileSchema = z.union([
 
 export type AnyCharacterPortFile = z.infer<typeof anyCharacterPortFileSchema>;
 
-export interface ImportFileOutcome {
-	fileName: string;
-	ok: boolean;
-	count?: number;
-	error?: string;
-}
+// Re-export the shared types for backwards-compat with existing imports.
+export type { ExportResponse, ImportFileOutcome } from "./port-shared";
 
 // Forward-declared in renderer-friendly form. The renderer imports
 // StoredCharacter from "@shared/schemas" directly.
@@ -74,8 +71,3 @@ export type ImportResponse =
 	| { success: true; imported: StoredCharacter[]; fileOutcomes: ImportFileOutcome[] }
 	| { success: false; canceled: true }
 	| { success: false; error: string; fileOutcomes?: ImportFileOutcome[] };
-
-export type ExportResponse =
-	| { success: true; path: string; count: number }
-	| { success: false; canceled: true }
-	| { success: false; error: string };

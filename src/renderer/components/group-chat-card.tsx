@@ -1,6 +1,7 @@
 import { Users } from "lucide-react";
 import type { StoredCharacter, StoredGroupChat } from "@/lib/types";
 import { getFullName } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface GroupChatCardProps {
 	data: StoredGroupChat;
@@ -43,24 +44,27 @@ export function GroupChatCard({
 	const visibleTiles = members.slice(0, MAX_VISIBLE_TILES);
 	const remainder =
 		members.length - visibleTiles.length + (missingCount > 0 ? missingCount : 0);
+	const accessibleLabel = `Open group chat: ${data.groupChat.title}, ${memberCount} cast member${memberCount === 1 ? "" : "s"}`;
 
 	return (
 		<a
-			aria-label={`Open group chat: ${data.groupChat.title}`}
-			className="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-card outline-none ring-1 ring-foreground/10 transition-all duration-300 ease-out hover:ring-transparent hover:[box-shadow:0_0_0_1px_oklch(0.78_0.27_305_/_0.35),0_0_28px_oklch(0.72_0.25_305_/_0.15)] focus-visible:ring-3 focus-visible:ring-ring/50"
+			aria-label={accessibleLabel}
+			className={cn(
+				"group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-card outline-none ring-1 ring-foreground/10",
+				"transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+				"hover:ring-transparent hover:[box-shadow:0_0_0_1px_oklch(0.78_0.27_305_/_0.35),0_0_36px_oklch(0.72_0.25_305_/_0.18)]",
+				"focus-visible:ring-3 focus-visible:ring-ring/50",
+			)}
 			href={`#/group-chats/${data.id}`}
 		>
-			<div
-				aria-hidden
-				className="absolute inset-0 flex"
-			>
+			<div aria-hidden className="absolute inset-0 flex">
 				{visibleTiles.map((m, idx) => {
 					const name = getFullName(m.character);
 					const isLastVisible =
 						idx === visibleTiles.length - 1 && remainder > 0;
 					return (
 						<div
-							className="relative flex-1 overflow-hidden bg-secondary/60 transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
+							className="relative flex-1 overflow-hidden bg-secondary/60 transition-transform duration-[900ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05]"
 							key={m.id}
 						>
 							{m.profileImageUrl ? (
@@ -105,64 +109,40 @@ export function GroupChatCard({
 
 			<div
 				aria-hidden
-				className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/95 via-background/35 to-transparent transition-opacity duration-300 ease-out group-hover:from-background"
+				className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/95 via-background/40 to-transparent transition-opacity duration-300 ease-out group-hover:from-background"
 			/>
 
 			<span
 				aria-hidden
-				className="absolute top-3 left-3 z-10 font-medium text-[10.5px] text-foreground/65 uppercase tracking-[0.22em] tabular-nums mix-blend-luminosity"
+				className="absolute top-3.5 left-4 z-10 font-medium text-[10.5px] text-foreground/65 uppercase tracking-[0.22em] tabular-nums mix-blend-luminosity"
 			>
 				N° {number}
 			</span>
-			<span
-				aria-hidden
-				className="absolute top-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-background/55 px-2 py-0.5 font-medium text-[10.5px] text-foreground/75 uppercase tracking-[0.18em] backdrop-blur-sm ring-1 ring-foreground/10"
-			>
-				<Users className="h-3 w-3" />
-				{memberCount}
-			</span>
 
-			<div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 p-4 sm:p-5">
-				<span className="eyebrow text-foreground/70">Group chat</span>
-				<h3 className="-tracking-[0.02em] line-clamp-2 font-semibold text-[1.35rem] text-foreground leading-[1.05] sm:text-[1.5rem]">
+			<div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-4 sm:p-5">
+				<h3 className="-tracking-[0.02em] line-clamp-2 font-semibold text-[1.4rem] text-foreground leading-[1.05] sm:text-[1.55rem]">
 					{data.groupChat.title}
 				</h3>
-				<p className="line-clamp-2 text-[0.8125rem] text-foreground/70 leading-relaxed">
+				<p className="line-clamp-2 text-[0.8125rem] text-foreground/70 leading-snug">
 					{data.groupChat.publicDescription}
 				</p>
-				{data.groupChat.tags && data.groupChat.tags.length > 0 && (
-					<div className="mt-0.5 flex flex-wrap gap-1">
-						{data.groupChat.tags.slice(0, 3).map((tag) => (
-							<span
-								className="inline-flex items-center rounded-full bg-background/55 px-2 py-0.5 font-medium text-[9.5px] text-foreground/80 uppercase tracking-[0.12em] ring-1 ring-foreground/10 backdrop-blur-sm"
-								key={tag}
-							>
-								{tag}
-							</span>
-						))}
-					</div>
-				)}
-				<div className="mt-1 flex items-center justify-between gap-3">
-					<div className="flex min-w-0 items-center gap-2 text-[10.5px] text-foreground/55 leading-none">
-						<span className="shrink-0 tabular-nums">
-							{formatDate(data.createdAt)}
-						</span>
-						<span
-							aria-hidden
-							className="h-0.5 w-0.5 shrink-0 rounded-full bg-foreground/25"
-						/>
-						<span className="truncate font-medium uppercase tracking-[0.18em] text-foreground/65">
-							{data.messageLength}
-						</span>
-					</div>
+				<div className="mt-1 flex items-center gap-2 text-[10.5px] text-foreground/55 leading-none">
+					<span className="inline-flex items-center gap-1 font-medium uppercase tracking-[0.18em] text-foreground/70">
+						<Users className="h-3 w-3" />
+						<span className="tabular-nums">{memberCount}</span>
+					</span>
 					<span
 						aria-hidden
-						className="font-medium text-[10.5px] text-foreground/45 uppercase tracking-[0.22em] transition-colors duration-200 group-hover:text-primary"
+						className="h-0.5 w-0.5 shrink-0 rounded-full bg-foreground/25"
+					/>
+					<span className="shrink-0 font-medium uppercase tracking-[0.18em] text-foreground/65">
+						{data.messageLength}
+					</span>
+					<span
+						aria-hidden
+						className="ml-auto shrink-0 tabular-nums text-foreground/45"
 					>
-						Open
-						<span className="ml-1 inline-block transition-transform duration-200 group-hover:translate-x-0.5">
-							›
-						</span>
+						{formatDate(data.createdAt)}
 					</span>
 				</div>
 			</div>
