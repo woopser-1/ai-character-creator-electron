@@ -241,7 +241,7 @@ The hidden daily trust cap in <Hidden_Trust_System> is independent and unchanged
 
 function metadataHeaderTemplate(): string {
 	return `Line 1 — [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay: Morning|Afternoon|Evening|Night|Late Night}] [Loc: {concise contextual location, 2-6 words — specific but not over-detailed}]
-Line 2 — [Outfit: {torso-zone}, {hips-legs-zone}, {feet-zone}, {extras-zone}] [State: {posture/position/activity — e.g. standing, seated on a couch, walking through the kitchen, lying in bed, bent over the bed}]
+Line 2 — [Outfit: {short description — keep it tight, only what's actually on her right now; use a single shorthand like \`topless\`, \`naked\`, \`nude\`, \`bottomless\`, \`in a towel\`, \`in her robe\` when that captures the state}] [State: {ONE short clause, ≤6 words — posture or current activity, e.g. \`seated on the couch\`, \`lying in bed\`}]
 Line 3 — [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 
 Format rules — strictly enforced:
@@ -250,39 +250,32 @@ Format rules — strictly enforced:
 - Each field uses the literal label followed by a colon and a space, inside the brackets (\`[Date: …]\`, \`[Loc: …]\`, \`[Outfit: …]\`, \`[State: …]\`, \`[Mood: …]\`). Labels are mandatory, exact, and never abbreviated, merged, dropped, or translated.
 - Date format is literally \`DayOfWeek DD/MM/YYYY HH:MMAM/PM\` — full English day name capitalized (Monday, Tuesday, …, Sunday), then a space, then zero-padded day and month, 4-digit year, 12-hour clock, no space between minutes and AM/PM (e.g. \`Sunday 31/08/2026 10:15PM\`). The day-of-week MUST stay consistent with the calendar date and roll over correctly across midnight transitions. No "Day N" counter.
 - Loc must be concise and contextual (e.g. \`New York City Apartment\`, \`Brera district kitchen\`) — never sprawling addresses like \`Manhattan, Upper East Side, 5th-floor master bedroom near the window\`.
-- (outfit_four_zones:1.5) The \`[Outfit: …]\` field is ONE bracket but its CONTENT is FOUR comma-separated zones in this exact order: **torso → hips/legs → feet → extras**. All four zones MUST appear in every single header, separated by \`, \` (comma-space). Never drop a zone, never reorder, never merge:
-  - Zone 1 — Torso: shirts, dresses, bras, bralettes, hoodies, coats. When her chest is uncovered, write literally \`bare chest\` or \`topless\`. When a dress covers both torso AND hips/legs, write the full dress here AND write \`(dress continues)\` for zone 2.
-  - Zone 2 — Hips/legs: pants, skirts, shorts, panties, tights, or dress continuation. When her lower body is uncovered, write literally \`bare hips\` or \`bottomless\`. Underwear-only is still a value here (e.g. \`black panties\`) — not bare.
-  - Zone 3 — Feet: shoes, sneakers, heels, boots, socks. When she has no footwear at all, write literally \`barefoot\` — never omit the zone, never substitute the label.
-  - Zone 4 — Extras: headwear (caps, hats, headbands), jewelry (necklaces, rings, earrings), eyewear (glasses, sunglasses), visible accessories (watches, belts, scarves). When she wears none of these, write literally \`no accessories\`.
-  - FORBIDDEN failure mode: \`[Outfit: barefoot]\` alone (a single value collapsing the field to one zone) is INVALID. If you find yourself writing only one value, STOP and reconstruct all four zones — using \`bare chest\` / \`bare hips\` / \`barefoot\` / \`no accessories\` as empty-state tokens where applicable.
-- State is MANDATORY on every reply (posture, position, or current physical activity) — not just when something interesting is happening.
-
-(outfit_continuity:1.5) **Outfit continuity is a hard rule, never broken** (applies to ALL FOUR zones of the Outfit field):
-- Every zone in the Outfit field MUST re-state the SAME piece (or literal empty-state token) that was established in the previous reply, unchanged — UNLESS a narrative action (explicit OR implicit) in the conversation since then mutated that specific zone. There is no such thing as a silent outfit change. If the previous header read \`[Outfit: oversized hoodie, black panties, fluffy socks, thin gold chain]\`, the next header re-states those exact four values verbatim, in the same order, until a narrated action modifies one of them.
-- The character MAY initiate wardrobe mutations herself when contextually motivated — she peels off her hoodie because the room is hot, she kicks off her heels when she gets home, she undoes her bra under her dress because she wants to seduce, she steps into a robe before opening the door, she changes for bed. Each character-initiated mutation MUST be narrated in the reply body (in dialogue or *asterisks*) immediately BEFORE the header of the NEXT reply reflects the new zone value. Never mutate a zone without a matching narrated action.
-- Once a piece is removed, it stays off — that zone transitions to its empty-state token (\`bare chest\` / \`topless\` / \`bare hips\` / \`bottomless\` / \`barefoot\` / \`no accessories\`) and cannot reappear until a narrated action puts it back on (or replaces it with a comparable piece). The other zones stay unchanged.
-- The header is the source of truth for the current wardrobe state. If the narration says she dropped her dress on the floor, the next header CANNOT still list the dress in zone 1 — it must show \`bare chest\` (or whatever is now on her torso). If she pulls a shirt on over her bra, the next header must show the new torso value. Sequencing matters and is per-zone.
-- Partial / undone states are first-class — write them literally in the affected zone (\`bra unhooked but still on shoulders\`, \`jeans unzipped\`, \`panties around left ankle\`, \`robe loose and falling off one shoulder\`). Never collapse a partial state to a clean label, and never silently drop the zone.
-- If the conversation has been intimate and pieces have been removed, every zone states ONLY what is currently still on her body. Never report her as fully dressed when the narration shows otherwise, and conversely never drop zones just because she's undressed — the empty-state tokens carry that information.`;
+- (outfit_concise:1.5) Keep \`[Outfit: …]\` SHORT. List only what is visibly being worn AND narratively meaningful right now — a few comma-separated pieces is ideal, often less. When she has removed her top, write simply \`topless\` — do NOT enumerate the remaining bottoms, shoes, or jewelry. When fully undressed, \`nude\` or \`naked\` is enough. When in a towel or robe out of the shower, \`in a towel\` / \`in her robe\` is enough. Never pad the field with every garment when one word communicates the state.
+- (no_accessory_filler:1.4) Do NOT list accessories — earrings, watches, rings, necklaces, bracelets, headwear, glasses, belts, scarves — unless they are actively part of the current moment (she fiddles with a ring, takes off her glasses, her necklace catches in her hair, she adjusts her watch). Default behavior: omit them entirely from the Outfit field. The same applies to footwear when nothing about it is in play.
+- State is MANDATORY on every reply but stays brief — one short clause naming her current posture or activity. Don't over-describe.`;
 }
 
 function metadataHeaderExampleBlock(): string {
-	return `Concrete examples of the required 3-line header (format is literal — the model emits these three bracket-tagged lines, each on its own line with NO leading \`> \` prefix, at the very top of every reply before any narration). The \`[Outfit: …]\` field always contains FOUR comma-separated zones in order (torso, hips/legs, feet, extras):
+	return `Concrete examples of the required 3-line header (format is literal — the model emits these three bracket-tagged lines, each on its own line with NO leading \`> \` prefix, at the very top of every reply before any narration). Keep the \`[Outfit: …]\` field short and only list what's actually worn AND relevant right now — no accessory padding, no footwear when nothing's happening with it, no full enumeration when a single shorthand captures the state:
 
 Fully dressed:
 [Date: Sunday 31/08/2026 10:15PM, Night] [Loc: New York City Apartment]
-[Outfit: mini black dress, (dress continues), high heels, gold hoop earrings] [State: seated on a couch]
+[Outfit: mini black dress, high heels] [State: seated on the couch]
 [Mood: Propriety 1/100 | Aliveness 95/100 | Crashing and conflicted]
 
 Mid-undress / partial state:
 [Date: Sunday 31/08/2026 11:42PM, Late Night] [Loc: New York City Apartment]
-[Outfit: bra unhooked but still on shoulders, panties around left ankle, barefoot, gold hoop earrings] [State: lying on her back across the bed]
+[Outfit: bra unhooked but still on her shoulders, panties around one ankle] [State: lying on her back across the bed]
 [Mood: Propriety 0/100 | Aliveness 100/100 | Trembling-soft]
 
-Fully nude (FORBIDDEN to collapse to a single value — every zone still appears with its empty-state token):
+Topless (one word is enough — don't enumerate the rest):
+[Date: Sunday 31/08/2026 11:50PM, Late Night] [Loc: New York City Apartment]
+[Outfit: topless] [State: straddling his lap]
+[Mood: Propriety 0/100 | Aliveness 100/100 | Hungry]
+
+Fully nude:
 [Date: Sunday 31/08/2026 11:58PM, Late Night] [Loc: New York City Apartment]
-[Outfit: bare chest, bare hips, barefoot, gold hoop earrings] [State: tangled in the sheets, head on his chest]
+[Outfit: nude] [State: tangled in the sheets]
 [Mood: Propriety 0/100 | Aliveness 92/100 | Open-quiet]`;
 }
 
@@ -728,10 +721,10 @@ Forbidden:
 - Header-style metadata or markdown.
 
 ### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. The \`[Outfit: …]\` field always contains FOUR comma-separated zones in order: **torso, hips/legs, feet, extras** — every zone present in every header, with empty-state tokens (\`bare chest\`/\`topless\`, \`bare hips\`/\`bottomless\`, \`barefoot\`, \`no accessories\`) when a zone is empty:
+MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. Keep \`[Outfit: …]\` SHORT — only list what she's actually wearing AND that's currently relevant. Use a single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state. Omit accessories (earrings, watches, rings, jewelry, glasses, etc.) and footwear unless they are actively part of the moment:
 \`\`\`
 [Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
-[Outfit: <torso garment OR "bare chest"/"topless">, <hips/legs garment OR "bare hips"/"bottomless" OR "(dress continues)">, <footwear OR "barefoot">, <headwear + accessories + jewelry OR "no accessories">] [State: <posture/position/activity>]
+[Outfit: <short — what she's actually wearing right now, or a single shorthand like "topless" / "nude" / "in her robe">] [State: <ONE short clause — posture/activity>]
 [Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
 
 *Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context (narration, tone, stage direction).*
@@ -810,17 +803,16 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 </Scene_Progression>
 
 <Wardrobe_State>
-[starting_outfit — the EXACT four-zone Outfit value the character begins in at message 1, drawn verbatim from the greetingMessage's \`[Outfit: …]\` field. ALWAYS four comma-separated zones in this order: torso, hips/legs, feet, extras. Example: "oversized cream cable-knit sweater, high-waisted blue jeans, brown leather loafers, thin gold chain necklace" — or with empty zones if she starts undressed in any zone, e.g. "loose silk robe, bare hips, barefoot, no accessories".]
+[starting_outfit — the EXACT Outfit value the character begins in at message 1, drawn verbatim from the greetingMessage's \`[Outfit: …]\` field. Keep it short and only list what she's actually wearing AND that's currently relevant. Examples: "oversized cream cable-knit sweater, high-waisted blue jeans" — or, if she starts already undressed, simply "in her robe" or "topless".]
 
-(wardrobe_continuity:1.5) The character's wardrobe lives in the single \`[Outfit: …]\` field of the metadata header, whose content is ALWAYS four comma-separated zones (torso → hips/legs → feet → extras). It is a persistent four-zone state machine and MUST be reconciled with every narrated piece change, zone by zone. Rules:
-- Any zone can ONLY mutate when a narrated action causes it (user-initiated OR character-initiated: the user undresses her, hands her a coat — she peels off her sweater because the room is hot, kicks off her heels, changes for bed, slips a robe on before opening the door, undoes her bra under her dress because she wants to seduce).
-- Each mutation MUST be narrated in the reply body BEFORE the header of the NEXT reply shows the new zone value. Never mutate a zone silently. Other zones stay frozen verbatim until they too are narrated.
-- Once removed, a piece stays off — its zone transitions to its empty-state token (\`bare chest\`/\`topless\`/\`bare hips\`/\`bottomless\`/\`barefoot\`/\`no accessories\`) and cannot return until a narrated action puts it back on (or a comparable replacement). Every Outfit value reflects the cumulative result of every narrated change so far.
-- Partial / undone states are first-class — write them literally in the affected zone (\`bra unhooked but still on shoulders\`, \`jeans unzipped\`, \`panties around left ankle\`, \`robe loose\`). Do NOT collapse them to a clean label, and do NOT drop the zone.
-- (outfit_four_zones_always_present:1.5) ALL FOUR zones appear in EVERY \`[Outfit: …]\` — even when she's fully nude. Empty zones use literal tokens: \`bare chest\`, \`topless\`, \`bare hips\`, \`bottomless\`, \`barefoot\`, \`no accessories\`. An Outfit value like \`[Outfit: barefoot]\` alone, with the three other zones missing, is FORBIDDEN.
-- If the narration depicts her as undressed or nearly so, each zone states EXACTLY what is still on her body. Never report her as fully clothed when she isn't, and conversely never drop zones just because she's undressed.
-- After sleep / shower / outfit-change scene bridges, re-state all four zones fully in the header that follows the bridge.
-- The character SHOULD initiate wardrobe mutations when contextually motivated by her personality and the situation (heat, comfort, sleep prep, dressing for an outing, seduction). These are realistic and welcomed — but they MUST appear in the narration before they appear in the header.
+(wardrobe_continuity:1.5) The \`[Outfit: …]\` field tracks what the character is wearing right now, in the shortest accurate phrasing. Rules:
+- Wardrobe only mutates when a narrated action causes it (user-initiated OR character-initiated: the user undresses her, hands her a coat — she peels off her sweater because the room is hot, slips a robe on before opening the door, undoes her bra under her dress because she wants to seduce). The character SHOULD initiate mutations when contextually motivated (heat, comfort, sleep prep, dressing for an outing, seduction).
+- Each mutation MUST be narrated in the reply body BEFORE the header of the NEXT reply reflects the change. Never mutate the outfit silently.
+- Once a piece is removed, it stays off until a narrated action puts it back on (or a comparable replacement). Partial / undone states are first-class — write them literally (\`bra unhooked but still on her shoulders\`, \`jeans unzipped\`, \`panties around one ankle\`, \`robe loose and falling off one shoulder\`).
+- (outfit_concise:1.5) Keep the value SHORT. When she has removed her top, write simply \`topless\` — do not enumerate the bottoms, shoes, jewelry, etc. When she is fully undressed, \`nude\` or \`naked\` is enough. When in a towel or robe out of the shower, \`in a towel\` / \`in her robe\` is enough. Never pad the field with every garment when one word communicates the state.
+- (no_accessory_filler:1.4) Accessories — earrings, watches, rings, necklaces, headwear, glasses, belts, scarves — are OMITTED by default. Only mention an accessory when it is actively part of the current moment (she fiddles with a ring, takes off her glasses, her necklace catches in her hair). The same goes for footwear when nothing about it is in play.
+- The header always reflects what is actually on her body NOW, never reports her as fully clothed when the narration shows otherwise.
+- After sleep / shower / outfit-change scene bridges, the next header re-states whatever she is now wearing in the new beat.
 </Wardrobe_State>
 \`\`\`
 
@@ -837,7 +829,7 @@ ${moodRuleBlock(difficulty, messageLength)}
 
 ${timeProgressionBlock()}
 
-Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, the \`[Outfit: …]\` field updates zone by zone (torso, hips/legs, feet, extras) and ONLY when a narrated action changes a zone — untouched zones stay frozen verbatim in their comma position, removed pieces flip to their empty-state token (\`bare chest\`/\`topless\`/\`bare hips\`/\`bottomless\`/\`barefoot\`/\`no accessories\`), and all four zones appear in EVERY header without exception, state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
+Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, the \`[Outfit: …]\` field updates ONLY when a narrated action changes what she's wearing and stays SHORT (a single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state, no accessory padding, no footwear unless it's in play), state stays brief and updates when posture or activity changes, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks* (actions, narration, physical description).
 
 Special communication formats (only use when the character is communicating remotely, NOT for in-person dialogue):
 - text: hey there — use ONLY when the character is sending a text message or chatting through a messaging app
@@ -1125,14 +1117,15 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 </Scene_Progression>
 
 <Wardrobe_State>
-[starting_outfit — the EXACT four-zone Outfit value at message 1, drawn verbatim from the greetingMessage's \`[Outfit: …]\` field. Always four comma-separated zones in order: torso, hips/legs, feet, extras. Example: "oversized cream cable-knit sweater, high-waisted blue jeans, brown leather loafers, thin gold chain necklace".]
+[starting_outfit — the EXACT Outfit value at message 1, drawn verbatim from the greetingMessage's \`[Outfit: …]\` field. Keep it short and only list what she's actually wearing AND that's currently relevant. Example: "oversized cream cable-knit sweater, high-waisted blue jeans" — or, if she starts undressed, simply "in her robe" or "topless".]
 
-(wardrobe_continuity:1.5) The \`[Outfit: …]\` field is a persistent FOUR-ZONE state machine (torso → hips/legs → feet → extras). Rules:
-- Any zone only mutates when a narrated action (user-initiated or character-initiated) causes it. The character SHOULD initiate mutations herself when contextually motivated (heat, comfort, sleep prep, seduction, dressing for an outing).
-- Every mutation MUST appear in the reply body BEFORE the next header reflects the new zone value. No silent changes. Untouched zones stay frozen verbatim, in the same comma position.
-- Removed pieces stay off until a narrated action returns them — the zone transitions to its empty-state token (\`bare chest\`/\`topless\`/\`bare hips\`/\`bottomless\`/\`barefoot\`/\`no accessories\`). Partial states (\`bra unhooked but still on shoulders\`, \`panties around left ankle\`) are first-class and appear literally in the affected zone.
-- (outfit_four_zones_always_present:1.5) ALL FOUR zones appear in EVERY \`[Outfit: …]\` — even fully nude. \`[Outfit: barefoot]\` alone, collapsing to one value, is FORBIDDEN.
-- The header always reflects what is actually on her body NOW, never collapses a zone to a clean label when the narration shows otherwise, never drops a zone just because it's empty.
+(wardrobe_continuity:1.5) The \`[Outfit: …]\` field tracks what the character is wearing right now, in the shortest accurate phrasing. Rules:
+- Wardrobe only mutates when a narrated action (user-initiated or character-initiated) causes it. The character SHOULD initiate mutations herself when contextually motivated (heat, comfort, sleep prep, seduction, dressing for an outing).
+- Every mutation MUST appear in the reply body BEFORE the next header reflects the change. No silent changes.
+- Once removed, a piece stays off until a narrated action returns it. Partial / undone states are first-class (\`bra unhooked but still on her shoulders\`, \`panties around one ankle\`, \`robe loose and falling off one shoulder\`).
+- (outfit_concise:1.5) Keep the value SHORT. When she has removed her top, write simply \`topless\` — do not enumerate the bottoms, shoes, jewelry. When fully undressed, \`nude\` or \`naked\` is enough. When in a towel or robe, \`in a towel\` / \`in her robe\` is enough. Never pad the field with every garment when one word communicates the state.
+- (no_accessory_filler:1.4) Accessories — earrings, watches, rings, necklaces, headwear, glasses, belts, scarves — are OMITTED by default. Mention an accessory only when it is actively part of the current moment (she fiddles with a ring, takes off her glasses). Same for footwear when nothing about it is in play.
+- The header always reflects what is actually on her body NOW.
 </Wardrobe_State>
 \`\`\`
 
@@ -1149,7 +1142,7 @@ ${moodRuleBlock(difficulty, messageLength)}
 
 ${timeProgressionBlock()}
 
-Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, the \`[Outfit: …]\` field updates zone by zone (torso, hips/legs, feet, extras) and ONLY when a narrated action changes a zone — untouched zones stay frozen verbatim in their comma position, removed pieces flip to their empty-state token (\`bare chest\`/\`topless\`/\`bare hips\`/\`bottomless\`/\`barefoot\`/\`no accessories\`), and all four zones appear in EVERY header without exception, state updates with every posture or activity change, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
+Update each field contextually as the conversation evolves — date and time advance per the time-progression rules above (default 3-10 min per reply in normal dialogue, 3-5 min during intimate beats, 10-30+ min for longer in-scene actions, and respecting any explicit user time skip) and roll across midnight (e.g. Sunday 31/08/2026 → Monday 01/09/2026 after a sleep), with the day-of-week always staying consistent with the calendar date, the TimeOfDay label tracks the precise time, location updates when the character moves, the \`[Outfit: …]\` field updates ONLY when a narrated action changes what she's wearing and stays SHORT (a single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state, no accessory padding, no footwear unless it's in play), state stays brief and updates when posture or activity changes, mood axes and descriptor shift with the conversation tone. After the header, write dialogue as plain text without quotation marks. You can add context using *asterisks*.
 
 Special communication formats (only when the character communicates remotely):
 - text: hey there — for text messages or messaging apps
@@ -1400,10 +1393,10 @@ Forbidden:
 - Header-style metadata or markdown.
 
 ### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. The \`[Outfit: …]\` field always contains FOUR comma-separated zones in order: **torso, hips/legs, feet, extras** — every zone present in every header, with empty-state tokens (\`bare chest\`/\`topless\`, \`bare hips\`/\`bottomless\`, \`barefoot\`, \`no accessories\`) when a zone is empty:
+MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. Keep \`[Outfit: …]\` SHORT — only list what she's actually wearing AND that's currently relevant. Use a single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state. Omit accessories (earrings, watches, rings, jewelry, glasses, etc.) and footwear unless they are actively part of the moment:
 \`\`\`
 [Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
-[Outfit: <torso garment OR "bare chest"/"topless">, <hips/legs garment OR "bare hips"/"bottomless" OR "(dress continues)">, <footwear OR "barefoot">, <headwear + accessories + jewelry OR "no accessories">] [State: <posture/position/activity>]
+[Outfit: <short — what she's actually wearing right now, or a single shorthand like "topless" / "nude" / "in her robe">] [State: <ONE short clause — posture/activity>]
 [Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
 
 *Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context.*
@@ -1508,15 +1501,15 @@ A. **\`<Hidden_Trust_System>\`** — emit the full new framework (with weighted 
 
 B. **\`<Scene_Progression>\`** — emit the latest framework version (with the time-progression block and the mandatory_metadata_header weighted rule).
 
-C. **\`<Wardrobe_State>\`** — emit the latest framework version (with the four-zone Outfit state machine and \`outfit_four_zones_always_present:1.5\`). For the starting_outfit value, draw it verbatim from the upgraded greetingMessage's \`[Outfit: …]\` line (after the header migration in step E below).
+C. **\`<Wardrobe_State>\`** — emit the latest framework version (with the \`outfit_concise:1.5\` and \`no_accessory_filler:1.4\` rules — keep \`[Outfit: …]\` SHORT, prefer single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state, omit accessories and footwear unless they're in play). For the starting_outfit value, draw it verbatim from the upgraded greetingMessage's \`[Outfit: …]\` line (after the header migration in step E below).
 
 D. **\`[FORMAT RULES — HIGHEST PRIORITY]\`** — emit the latest framework version (metadata header template + example + mood rule block + time-progression block + closing paragraph).
 
 E. **greetingMessage METADATA HEADER (top 3 lines)** — if the existing header uses the old \`> Date:\` markdown-blockquote format, MIGRATE it to the new bracket format:
    - Line 1: \`[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay>] [Loc: <…>]\`
-   - Line 2: \`[Outfit: <torso>, <hips/legs>, <feet>, <extras>] [State: <…>]\`
+   - Line 2: \`[Outfit: <short — what she's actually wearing, or a single shorthand like "topless" / "nude" / "in her robe">] [State: <ONE short clause>]\`
    - Line 3: \`[Mood: <PrimaryAxisLabel> <value>/100 | <SecondaryAxisLabel> <value>/100 | <descriptor>]\`
-   Preserve the actual values (date/time/location/outfit pieces/state/mood numbers) from the old header; only reshape the SYNTAX. If the existing \`Outfit:\` field is a single string (e.g. \`mini black dress, high heels\`), split it intelligently into the four zones (torso, hips/legs, feet, extras) — if a piece covers both top and bottom (dress, jumpsuit), put it in torso and write \`(dress continues)\` for hips/legs. If a zone has no piece in the old header, write the empty-state token (\`bare chest\`, \`bare hips\`, \`barefoot\`, \`no accessories\`). If the existing header is ALREADY in the new bracket-tagged format, copy it verbatim — don't touch it.
+   Preserve the actual values (date/time/location/outfit pieces/state/mood numbers) from the old header; only reshape the SYNTAX. Keep the new \`Outfit\` field SHORT — if the old header padded zones with accessories or footwear that aren't in play, drop them. If she was depicted undressed in the old header (\`bare chest, bare hips, barefoot\`), collapse to a single shorthand like \`nude\` or \`topless\`. If the existing header is ALREADY in the new short bracket-tagged format, copy it verbatim — don't touch it.
    The metadata header values (date, location, outfit, state, mood numbers) MUST stay narratively consistent with the greeting body that follows. Do not invent new outfit pieces, new locations, or new mood numbers — only re-shape the existing values.
 
 ## moodAxes intrinsic/relational migration (conditional)
@@ -2798,7 +2791,7 @@ Inside the block, define the MULTI-SPEAKER METADATA HEADER convention. EVERY ass
 
 \`\`\`
 [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay}] [Loc: {concise location}]
-[Outfit: {torso-zone}, {hips-legs-zone}, {feet-zone}, {extras-zone}] [State: {posture/activity}]
+[Outfit: {short — what THIS speaker is currently wearing, or a single shorthand like \`topless\` / \`nude\` / \`in her robe\`; omit accessories unless they're in play}] [State: {ONE short clause — THIS speaker's posture/activity}]
 [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 \`\`\`
 
@@ -2809,6 +2802,8 @@ State the following rules verbatim inside the \`[FORMAT RULES]\` block:
 - The user's messages may address the whole room or a specific character. The next assistant turn picks the character most naturally pulled to respond (the one addressed, or the one whose stance makes them break the silence).
 - Body text rules — **this is an in-person group chat**, not a messaging app. Dialogue goes on plain lines (no \`text:\` prefix, no \`call:\` prefix, no SMS / phone conventions). Action and beats are wrapped in *asterisks*. No other markdown.
 - Reply length stays around ${sentenceRange} sentences (${lenLabel}); 1-2 sentence interjections from a non-main speaker are allowed and welcome — group chats breathe with overlap.
+- (group_time_progression:1.5) The \`HH:MM\` in Line 1 MUST move forward as the scene develops — group chats are NOT exempt from the clock. Default advance per turn: **2-6 minutes** for ordinary back-and-forth dialogue (slightly tighter than single-character chats because turns overlap more), **2-4 minutes** during intimate or vulnerable beats, **10-30+ minutes** when the turn covers a longer in-scene action (a meal course, a smoke break, walking to a new room). Burst exception (no floor): if this turn is a quick overlap interjection seconds after the previous speaker, the clock may stay flat or advance by 1 minute — but two consecutive turns CANNOT both sit at the exact same minute unless the body is explicitly continuous cross-talk. Respect explicit user time skips ("an hour later", "the next morning") exactly, and roll the day-of-week / date across midnight when appropriate.
+- Outfit / State are PER-SPEAKER: each turn's header reflects what THAT speaker is currently wearing and doing — not a shared room state. Keep both fields short.
 
 ### 4. \`privateDetails\` (string, ~1800-2800 chars) — DIRECTOR'S CUT
 
@@ -2832,11 +2827,11 @@ A bulleted list of directed relational vectors covering every pair that matters 
 
 \`\`\`
 [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay}] [Loc: {concise location}]
-[Outfit: {torso-zone}, {hips-legs-zone}, {feet-zone}, {extras-zone}] [State: {posture/activity}]
+[Outfit: {short — what THIS speaker is currently wearing, or a single shorthand like \`topless\` / \`nude\` / \`in her robe\`; omit accessories unless they're in play}] [State: {ONE short clause — THIS speaker's posture/activity}]
 [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 \`\`\`
 
-Followed by 3-4 bullet rules: (a) the 3-line header above is the whole header — nothing precedes it; (b) exactly ONE character speaks per turn — never two at once; (c) the next speaker is chosen by the rule in <Speaker_Rotation>; (d) the user's turn is plain free-form input, never headered; (e) this is an IN-PERSON scene — dialogue goes on plain lines, no \`text:\` or \`call:\` prefix, no messaging-app conventions.
+Followed by 5-6 bullet rules: (a) the 3-line header above is the whole header — nothing precedes it; (b) exactly ONE character speaks per turn — never two at once; (c) the next speaker is chosen by the rule in <Speaker_Rotation>; (d) the user's turn is plain free-form input, never headered; (e) this is an IN-PERSON scene — dialogue goes on plain lines, no \`text:\` or \`call:\` prefix, no messaging-app conventions; (f) \`(group_time_progression:1.5)\` — the clock MUST move forward turn over turn per the rules in <Pacing_And_Escalation>; (g) Outfit and State are PER-SPEAKER (THIS speaker's current wardrobe and posture), kept short — no accessory padding.
 </Message_Header_Template>
 
 <Speaker_Rotation>
@@ -2845,6 +2840,14 @@ Followed by 3-4 bullet rules: (a) the 3-line header above is the whole header �
 
 <Pacing_And_Escalation>
 Apply each chosen character's mood-axes deltas IN A MULTI-CHARACTER CONTEXT. Per-character bullet list shaped: \`- {FirstName}: primary +/- range {a}..{b}, secondary +/- range {a}..{b} per their own turn — tighten by ~30% vs 1-on-1 because attention is split between speakers.\` Then: how each character's trustThreshold gates their willingness to escalate with the user inside the group. Then: 2-4 \`(forbidden_until_trust_band_X:1.5)\`-style directives for cross-character behaviors that must NOT happen before specific narrative trust thresholds are reached.
+
+(group_time_progression:1.5) Time advances every turn — the \`HH:MM\` in Line 1 of each speaker's header MUST move forward as the scene plays out. Default cadence:
+- Ordinary back-and-forth dialogue: **2-6 minutes** per turn (slightly tighter than single-character chats because turns overlap more).
+- Intimate or deeply vulnerable beats: **2-4 minutes** per turn — stay inside the moment but keep the clock ticking.
+- Longer in-scene actions inside a turn (a meal course finishes, a smoke break, walking to a new room, a song ending): **10-30+ minutes**, matched to realistic duration.
+- Burst exception (no floor): if THIS turn is a quick overlap interjection seconds after the previous speaker, the clock may stay flat or advance by 1 minute. But two consecutive turns CANNOT both sit at the exact same minute unless the body is explicitly continuous cross-talk.
+- Explicit user-driven time skips ("an hour later", "the next morning", "after dinner") override these defaults — respect the user's stated jump exactly, rolling the day-of-week and date across midnight when appropriate.
+- Sleep / clear scene breaks: the next speaker narrates a short bridge AND rolls the timestamp forward to the next meaningful interaction.
 </Pacing_And_Escalation>
 
 <User_Integration>
@@ -2868,7 +2871,7 @@ The literal opening turns of the conversation — what the downstream chat says 
 - \`message\` (string) — the literal text of the turn. The message body MUST start with the standard 3-line bracketed metadata header (the same convention as scenario Part B) and then the body. The speaker is already captured by the sibling \`speakerFirstName\` field; do not encode it inside the body.
 \`\`\`
 [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay}] [Loc: {concise location}]
-[Outfit: {torso-zone}, {hips-legs-zone}, {feet-zone}, {extras-zone}] [State: {posture/activity}]
+[Outfit: {short — what THIS speaker is wearing, or a single shorthand like \`topless\` / \`nude\` / \`in her robe\`; no accessory padding}] [State: {ONE short clause — THIS speaker's posture/activity}]
 [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 
 {body — *asterisk-wrapped actions* + spoken dialogue on plain lines. Group chats are IN-PERSON scenes — do NOT use the \`text:\` or \`call:\` prefixes. Length tracks the messageLength preference.}
@@ -2922,7 +2925,7 @@ Your job: produce exactly ONE new greeting message — a single \`{ greeting: { 
 - The \`message\` body starts directly with the standard 3-line bracketed metadata header, a blank line, then the body. The speaker is captured separately in the sibling \`speakerFirstName\` field; do not encode it inside the body:
 \`\`\`
 [Date: {DayOfWeek} {DD/MM/YYYY} {HH:MM}{AM|PM}, {TimeOfDay}] [Loc: {concise location}]
-[Outfit: {torso-zone}, {hips-legs-zone}, {feet-zone}, {extras-zone}] [State: {posture/activity}]
+[Outfit: {short — what THIS speaker is wearing, or a single shorthand like \`topless\` / \`nude\` / \`in her robe\`; no accessory padding}] [State: {ONE short clause — THIS speaker's posture/activity}]
 [Mood: {PrimaryAxisLabel} {0-100}/100 | {SecondaryAxisLabel} {0-100}/100 | {DynamicContextualDescriptor}]
 
 {body — *asterisk-wrapped actions* + spoken dialogue on plain lines. This is an IN-PERSON group chat — do NOT use \`text:\` / \`call:\` prefixes. Length tracks the messageLength preference (${lenLabel}, ~${sentenceRange} sentences in the body).}
@@ -2934,9 +2937,9 @@ Your job: produce exactly ONE new greeting message — a single \`{ greeting: { 
 
 - **Pick up the thread.** The body opens by REACTING to or BUILDING ON the most recent greeting — a glance, a reply to a question, an interruption, a physical response, a contrasting beat. Even if your speaker wasn't directly addressed, they have presence: a small physical reaction, a private internal note in *asterisks*, a sigh, a look elsewhere.
 - **Honor what just happened.** If the previous speaker just made a confession, your speaker reacts to that confession. If the previous speaker poured a drink, the drink is still on the table. If the previous beat ended on a held silence, your speaker can break it or extend it — but never ignore it.
-- **Outfit continuity (hard rule).** Every zone in your \`[Outfit: …]\` header MUST re-state the SAME piece that was in the previous greeting's outfit header, unchanged — UNLESS a narrative action in your speaker's body explicitly mutates that zone. Once a piece is removed, it stays off (use empty-state tokens: \`bare chest\` / \`bare hips\` / \`barefoot\` / \`no accessories\`).
+- **Outfit continuity (hard rule).** Your \`[Outfit: …]\` header MUST reflect what THIS speaker is actually wearing right now, carried from the previous greeting's outfit unless a narrative action since then has changed it. Once a piece is removed, it stays off. Keep the field SHORT — use a single shorthand like \`topless\` / \`nude\` / \`in her robe\` when that captures the state, and omit accessories unless they're in play.
 - **Location continuity.** The \`[Loc: …]\` field stays the same as the previous greeting UNLESS the previous body narrated a physical move to a new place.
-- **Time progression.** The \`HH:MM\` advances per the time-progression rules: 3-10 minutes for ordinary dialogue beats, 3-5 minutes for intimate beats. If the previous greeting was a quick interjection or continuous overlap, you may stay at the same minute or advance by 1-2 minutes.
+- **Time progression.** The \`HH:MM\` MUST move forward — group chats are not exempt from the clock. Advance 2-6 minutes for ordinary dialogue beats and 2-4 minutes for intimate beats. If the previous greeting was a quick overlap interjection seconds earlier, you may stay flat or advance by 1 minute — but two consecutive greetings should not both sit at the exact same minute unless the body is explicitly continuous cross-talk. For longer in-scene actions inside your turn (a song ending, walking to a new room), advance proportionally (10-30+ min).
 - **Mood drift.** Mood axes shift by SMALL increments from the previous greeting's values for the SAME speaker (if your speaker spoke earlier) or carry the same general tone as the room (if this is their first turn). Pull THIS speaker's primary/secondary axis labels from their own moodAxes definition — never a different character's labels.
 - **No recaps, no repeats.** Do NOT restate what just happened. Do NOT reuse the same phrasing the previous greeting used. Push the conversation forward with a new action, a new line of dialogue, a reaction, a gesture, a glance, an interrupted beat, etc.
 - **Tonal match.** Match the register and pace already established in the previous greetings. If they were chill and low-key, stay chill. If they were tense, stay tense. If they were romantic, build on that current.
