@@ -1,7 +1,7 @@
 {
   "name": "ai-character-creator-electron",
   "productName": "AI Character Creator",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "description": "Personal Electron app for AI character creation using Claude Code subscription",
   "author": "woopser",
