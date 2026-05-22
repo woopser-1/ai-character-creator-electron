@@ -167,39 +167,15 @@ export function GroupChatsPage() {
 
 	return (
 		<div
-			className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pt-10 pb-16 sm:px-6 lg:px-8 lg:pt-14"
+			className="relative mx-auto w-full max-w-6xl px-4 pt-10 pb-16 sm:px-6 lg:px-8 lg:pt-14"
 			onDragEnter={handleDragEnter}
 			onDragLeave={handleDragLeave}
 			onDragOver={handleDragOver}
 			onDrop={handleDrop}
 		>
-			<div className="flex items-end justify-between gap-4">
-				<div className="flex flex-col gap-2">
-					<div className="flex items-baseline gap-2.5">
-						<span className="eyebrow text-foreground/55">Group Chats</span>
-						<span
-							aria-hidden
-							className="h-0.5 w-0.5 shrink-0 rounded-full bg-foreground/25"
-						/>
-						<span className="font-medium text-[10.5px] text-foreground/45 uppercase tracking-[0.18em] tabular-nums">
-							{String(count).padStart(2, "0")} on the shelf
-						</span>
-					</div>
-					<h1 className="-tracking-[0.02em] font-semibold text-[2rem] text-foreground leading-tight sm:text-[2.5rem]">
-						Multi-character scenarios
-					</h1>
-				</div>
-				<div className="flex items-center gap-1.5">
-					<GroupChatsFilesTriggerButton />
-					<a href="#/group-chats/create">
-						<Button size="sm">
-							<Users className="mr-1 h-3.5 w-3.5" />
-							New Group Chat
-						</Button>
-					</a>
-				</div>
-			</div>
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			<Masthead count={count} />
+
+			<div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
 				{groupChats.map((gc, idx) => (
 					<GroupChatCard
 						charactersById={charactersById}
@@ -209,8 +185,48 @@ export function GroupChatsPage() {
 					/>
 				))}
 			</div>
+
 			<DragOverlay show={pageDragOver} />
 		</div>
+	);
+}
+
+function Masthead({ count }: { count: number }) {
+	return (
+		<header className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr_auto] sm:items-end sm:gap-10">
+			<div className="flex items-end gap-5">
+				<span
+					aria-hidden
+					className="display-figure text-[5.5rem] text-foreground leading-[0.85] sm:text-[6.5rem]"
+				>
+					{String(count).padStart(2, "0")}
+				</span>
+				<div className="pb-3">
+					<div className="eyebrow text-foreground/55">The roster</div>
+					<div className="mt-1.5 text-[0.8125rem] text-muted-foreground">
+						{count === 1 ? "Group chat on the shelf" : "Group chats on the shelf"}
+					</div>
+				</div>
+			</div>
+			<div
+				aria-hidden
+				className="hidden h-px self-end bg-gradient-to-r from-foreground/15 via-foreground/8 to-transparent sm:block sm:mb-5"
+			/>
+			<div className="flex items-center justify-between gap-2 sm:justify-end sm:pb-3">
+				<span className="font-medium text-[10.5px] text-foreground/45 uppercase tracking-[0.22em] sm:hidden">
+					Group chats
+				</span>
+				<div className="flex items-center gap-1.5">
+					<GroupChatsFilesTriggerButton />
+					<a href="#/group-chats/create">
+						<Button className="glow-sm hover:glow-md" size="sm">
+							<Users className="h-3.5 w-3.5" />
+							New Group Chat
+						</Button>
+					</a>
+				</div>
+			</div>
+		</header>
 	);
 }
 
