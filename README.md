@@ -48,42 +48,166 @@ chmod +x AI-Character-Creator-*-Linux-x64.AppImage
 ./AI-Character-Creator-*-Linux-x64.AppImage
 ```
 
-## Requirements
+## Running the project from source — a step-by-step for non-developers
 
-- [**Bun**](https://bun.sh) — used as the package manager and runtime
-- [**Claude Code CLI**](https://claude.com/claude-code) installed and authenticated on your system (the app shells out to the `claude` binary)
-- macOS (the build script targets `--mac --arm64`; the dev workflow should work on Linux/Windows but isn't tested)
+You don't need to know how to code to run this app from source. You do need to follow a handful of one-time setup steps in **Terminal** (on macOS, find it under `Applications → Utilities → Terminal`, or press `⌘ + Space` and type `Terminal`). On Windows, use **PowerShell** (press `⊞ Win`, type `PowerShell`).
 
-## Running the project with Bun
+When the steps below ask you to "run a command", that means: copy the line that starts with `$` (without the `$` itself), paste it into Terminal, and press `Enter`.
+
+---
+
+### Step 1 — Install Claude Code
+
+Claude Code is the official CLI from Anthropic. This app talks to Claude through it.
+
+**macOS / Linux:**
 
 ```sh
-# Install dependencies
-bun install
-
-# Start the app in dev mode (Electron + Vite, with HMR)
-bun run dev
+$ curl -fsSL https://claude.ai/install.sh | bash
 ```
 
-Other useful scripts:
+**Windows (PowerShell, run as Administrator the first time):**
+
+```powershell
+$ irm https://claude.ai/install.ps1 | iex
+```
+
+Verify it worked by running:
 
 ```sh
-bun run dev:quiet   # dev mode without DEBUG_CLAUDE logging
-bun run build       # production build
+$ claude --version
+```
+
+If you see a version number, you're good. If you see "command not found", close and reopen Terminal and try again — the installer sometimes needs a fresh shell to pick up the new PATH.
+
+Official install docs (in case the link above moves): <https://docs.claude.com/en/docs/claude-code/setup>
+
+---
+
+### Step 2 — Log in to Claude
+
+The app does NOT log you in for you. **You must already be logged in to Claude through the CLI before the app can do anything.** This is what the disclaimer at the top means by "consumes whatever Claude plan or API access you have configured on your own machine" — the app uses YOUR Claude account.
+
+Run:
+
+```sh
+$ claude
+```
+
+The first time, it opens your browser and asks you to sign in to your Claude account. Follow the prompts. Once you're back at the Terminal prompt and Claude is running, you can type `/exit` or press `Ctrl + C` to quit — the login is saved.
+
+You only do this once. After that, the app and the CLI both use the saved login.
+
+> ⚠️ **You need an active Claude plan** (Pro, Max, Team, or an Anthropic API key with credits) for the app to work. Generation costs are billed against YOUR account — see the disclaimer at the top of this README.
+
+---
+
+### Step 3 — Install Bun
+
+Bun is the runtime and package manager this project uses (instead of Node.js + npm). It's a single binary, fast to install.
+
+**macOS / Linux:**
+
+```sh
+$ curl -fsSL https://bun.sh/install | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$ powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+Verify it worked:
+
+```sh
+$ bun --version
+```
+
+If you see a version number, you're good. If "command not found", close and reopen Terminal.
+
+Official install docs: <https://bun.sh/docs/installation>
+
+---
+
+### Step 4 — Download this project
+
+Two ways. If you don't know git, use the ZIP option.
+
+**Option A — ZIP download (easiest):**
+
+1. Go to <https://github.com/woopser-1/ai-character-creator-electron> in your browser.
+2. Click the green **Code** button → **Download ZIP**.
+3. Unzip the file. You'll get a folder called `ai-character-creator-electron-main` (or similar).
+4. In Terminal, navigate into that folder. The easy way: type `cd ` (with a trailing space), then DRAG the folder from Finder/Explorer onto the Terminal window — the path appears automatically. Press `Enter`.
+
+**Option B — git clone (if you have git):**
+
+```sh
+$ git clone https://github.com/woopser-1/ai-character-creator-electron.git
+$ cd ai-character-creator-electron
+```
+
+---
+
+### Step 5 — Install the project's dependencies and start the app
+
+From inside the project folder, run:
+
+```sh
+$ bun install
+```
+
+This downloads everything the app needs (a few minutes the first time).
+
+Then start the app:
+
+```sh
+$ bun run dev
+```
+
+A desktop window should open within 10-30 seconds. That's it — the app is running.
+
+To stop the app, close the window, or go back to Terminal and press `Ctrl + C`.
+
+Next time you want to use the app, just `cd` into the project folder again and run `bun run dev` — steps 1-4 are one-time setup.
+
+---
+
+## Requirements (summary)
+
+- **An active Claude account** with a Pro/Max/Team plan or an Anthropic API key with credits (the app uses your subscription)
+- [**Claude Code CLI**](https://docs.claude.com/en/docs/claude-code/setup) installed and logged in
+- [**Bun**](https://bun.sh) installed
+- macOS, Linux, or Windows (the build script targets macOS first; the dev workflow runs on all three)
+
+## Other useful commands (optional)
+
+These are extras for people who want to dig deeper. You don't need them to use the app.
+
+```sh
+bun run dev:quiet   # dev mode without debug logging
+bun run build       # production build (no window)
 bun run start       # preview the built app
-bun run check       # lint with Ultracite
+bun run check       # lint the code
 bun run fix         # auto-fix lint issues
-bun run dist:mac    # package a macOS arm64 .app/.dmg
+bun run dist:mac    # package a macOS arm64 .app/.dmg installer
 ```
 
 ### About the Claude binary
 
-The main process spawns `claude` from your `PATH`. If your binary lives elsewhere, set:
+The app spawns `claude` from your `PATH` (the list of locations your shell searches for commands). If your `claude` binary lives somewhere unusual, point the app at it explicitly:
 
 ```sh
 CLAUDE_BIN=/full/path/to/claude bun run dev
 ```
 
-You must already be logged in to Claude through the CLI (`claude` once, follow the auth flow) — the app does not handle authentication itself.
+You can find the full path to your `claude` binary with:
+
+```sh
+$ which claude       # macOS / Linux
+$ Get-Command claude # Windows PowerShell
+```
 
 ## Usage, modifications & contributions
 
