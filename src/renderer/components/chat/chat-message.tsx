@@ -195,11 +195,21 @@ export function ChatMessage({
 								return <ToolThinkingIndicator key={key} />;
 							}
 
+							// Tool-level rewind = parent-message rewind. The existing
+							// rewindTo flow walks back to the prior user turn and resends
+							// it; the IA then re-asks the question, naturally resuming the
+							// conversation from this point.
+							const toolRewind =
+								rewindable && onRewind
+									? () => onRewind(message.id)
+									: undefined;
+
 							switch (toolName) {
 								case "suggestOptions":
 									return (
 										<ToolSuggestOptions
 											key={key}
+											onRewind={toolRewind}
 											onSubmit={handleSubmit}
 											options={input.options as string[]}
 											question={input.question as string}
@@ -213,6 +223,7 @@ export function ChatMessage({
 									return (
 										<ToolAskUser
 											key={key}
+											onRewind={toolRewind}
 											onSubmit={handleSubmit}
 											question={input.question as string}
 											submitted={isComplete}
@@ -225,6 +236,7 @@ export function ChatMessage({
 									return (
 										<ToolYesNo
 											key={key}
+											onRewind={toolRewind}
 											onSubmit={handleSubmit}
 											question={input.question as string}
 											submitted={isComplete}
@@ -237,6 +249,7 @@ export function ChatMessage({
 									return (
 										<ToolSelectMultiple
 											key={key}
+											onRewind={toolRewind}
 											onSubmit={handleSubmit}
 											options={input.options as string[]}
 											question={input.question as string}

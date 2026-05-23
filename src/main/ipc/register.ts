@@ -1256,14 +1256,15 @@ export function registerIpc(window: BrowserWindow): void {
       }
       const updated = await updateCharacter(payload.id, {
         imageModel: targetModel,
-        gatheringSummary: payload.gatheringSummary,
         confirmedProfile: payload.confirmedProfile ?? existing.confirmedProfile,
         character: {
           ...existing.character,
+          age: parsed.data.age,
           customPhysicalDetails: parsed.data.customPhysicalDetails,
           customFaceDetails: parsed.data.customFaceDetails,
           baseGenerationPrompt: parsed.data.baseGenerationPrompt,
           baseImagePrompt: parsed.data.baseImagePrompt,
+          ourDreamFields: parsed.data.ourDreamFields,
           ...(payload.confirmedMeasurements
             ? { confirmedMeasurements: payload.confirmedMeasurements }
             : {}),
@@ -1327,6 +1328,245 @@ export function registerIpc(window: BrowserWindow): void {
         scenes: result.data,
       });
       return { success: true as const, stored: updated };
+    }
+  );
+
+  ipcMain.handle(
+    "characters:regeneratePartial",
+    async (
+      _event,
+      payload: {
+        id: string;
+        steps: CharacterStepId[];
+        regenerateScenes: boolean;
+        gatheringSummary: string;
+        gatheringMessagesAppend?: UIMessage[];
+        confirmedMeasurements?: Measurements;
+        confirmedProfile?: ConfirmedProfile;
+        imageModel?: ImageModel;
+      }
+    ) => {
+      const existing = await getCharacter(payload.id);
+      if (!existing) {
+        return {
+          success: false as const,
+          error: `Character ${payload.id} not found`,
+        };
+      }
+      if (payload.steps.length === 0 && !payload.regenerateScenes) {
+        return {
+          success: false as const,
+          error: "No regeneration targets selected",
+        };
+      }
+      const settings = await getSettings();
+      const messageLength = existing.messageLength ?? DEFAULT_MESSAGE_LENGTH;
+      const targetModel =
+        payload.imageModel ?? existing.imageModel ?? DEFAULT_IMAGE_MODEL;
+      const summary = withConfirmedMeasurements(
+        payload.gatheringSummary,
+        payload.confirmedMeasurements
+      );
+      const {
+        characterLightSchema,
+        scenarioOnlySchema,
+        personalityOnlySchema,
+        extraDetailsOnlySchema,
+        characterVisualSchema,
+      } = await import("@shared/schemas");
+
+      const stepOutcomes = await Promise.all(
+        payload.steps.map(async (stepId) => {
+          const result = await generateCharacterStep({
+            runId: nanoid(),
+            stepId,
+            difficulty: existing.difficulty,
+            messageLength,
+            imageModel: targetModel,
+            generationModel: settings.generationModel,
+            gatheringSummary: summary,
+            superAdmin: settings.superAdmin,
+            confirmedProfile: payload.confirmedProfile,
+            onEvent: emitProgress,
+          });
+          return { stepId, result };
+        })
+      );
+
+      for (const { stepId, result } of stepOutcomes) {
+        if (!result.success) {
+          return {
+            success: false as const,
+            error: result.error ?? `${stepId} regeneration failed`,
+          };
+        }
+      }
+
+      const characterPatch: Partial<Character> = {};
+      for (const { stepId, result } of stepOutcomes) {
+        if (!result.success) continue;
+        switch (stepId) {
+          case "light": {
+            const parsed = characterLightSchema.safeParse(result.data);
+            if (!parsed.success) {
+              return {
+                success: false as const,
+                error: `light schema validation failed: ${parsed.error.message}`,
+              };
+            }
+            characterPatch.moodAxes = parsed.data.moodAxes;
+            characterPatch.difficultyProfile = parsed.data.difficultyProfile;
+            characterPatch.intimacyProfile = parsed.data.intimacyProfile;
+            break;
+          }
+          case "scenario": {
+            const parsed = scenarioOnlySchema.safeParse(result.data);
+            if (!parsed.success) {
+              return {
+                success: false as const,
+                error: `scenario schema validation failed: ${parsed.error.message}`,
+              };
+            }
+            characterPatch.scenario = parsed.data.scenario;
+            break;
+          }
+          case "personality": {
+            const parsed = personalityOnlySchema.safeParse(result.data);
+            if (!parsed.success) {
+              return {
+                success: false as const,
+                error: `personality schema validation failed: ${parsed.error.message}`,
+              };
+            }
+            characterPatch.additionalPersonalityDetails =
+              parsed.data.additionalPersonalityDetails;
+            break;
+          }
+          case "extras": {
+            const parsed = extraDetailsOnlySchema.safeParse(result.data);
+            if (!parsed.success) {
+              return {
+                success: false as const,
+                error: `extras schema validation failed: ${parsed.error.message}`,
+              };
+            }
+            characterPatch.extraDetails = parsed.data.extraDetails;
+            break;
+          }
+          case "visual": {
+            const parsed = characterVisualSchema.safeParse(result.data);
+            if (!parsed.success) {
+              return {
+                success: false as const,
+                error: `visual schema validation failed: ${parsed.error.message}`,
+              };
+            }
+            characterPatch.age = parsed.data.age;
+            characterPatch.customPhysicalDetails =
+              parsed.data.customPhysicalDetails;
+            characterPatch.customFaceDetails = parsed.data.customFaceDetails;
+            characterPatch.baseGenerationPrompt =
+              parsed.data.baseGenerationPrompt;
+            characterPatch.baseImagePrompt = parsed.data.baseImagePrompt;
+            characterPatch.ourDreamFields = parsed.data.ourDreamFields;
+            break;
+          }
+        }
+      }
+      if (payload.confirmedMeasurements) {
+        characterPatch.confirmedMeasurements = payload.confirmedMeasurements;
+      }
+
+      let scenesPatch: Scene[] | undefined;
+      if (payload.regenerateScenes) {
+        const mergedCharacter: Character = {
+          ...existing.character,
+          ...characterPatch,
+        };
+        const sceneCount =
+          existing.scenes.length > 0 ? existing.scenes.length : 4;
+        const sceneConcepts = existing.scenes.length
+          ? existing.scenes
+              .map((s, i) => `${i + 1}. ${s.sceneName}`)
+              .join("\n")
+          : "(no prior scenes — invent fresh concepts that fit the character)";
+        const synthSummary = [
+          `Regenerating the scene set for ${mergedCharacter.firstName} ${mergedCharacter.lastName}.`,
+          `Difficulty: ${existing.difficulty}.`,
+          `Personality: ${mergedCharacter.personalityLabel}.`,
+          `Occupation: ${mergedCharacter.occupationLabel}.`,
+          `Scenario gist: ${mergedCharacter.scenario.slice(0, 600)}`,
+          "",
+          `Generate exactly ${sceneCount} scenes preserving the original scene NAMES and concepts below, but written for the new image model. Do NOT invent new scene names — reuse these in order:`,
+          sceneConcepts,
+        ].join("\n");
+        const sceneRes = await generateScenes({
+          runId: nanoid(),
+          character: mergedCharacter,
+          gatheringSummary: synthSummary,
+          superAdmin: settings.superAdmin,
+          imageModel: targetModel,
+          generationModel: settings.generationModel,
+          sceneCount,
+          onEvent: emitProgress,
+        });
+        if (!sceneRes.success) {
+          return {
+            success: false as const,
+            error: sceneRes.error ?? "scenes regeneration failed",
+          };
+        }
+        scenesPatch = sceneRes.data;
+      }
+
+      const updates: Partial<Omit<StoredCharacter, "id" | "createdAt">> = {};
+      if (Object.keys(characterPatch).length > 0) {
+        updates.character = { ...existing.character, ...characterPatch };
+      }
+      if (scenesPatch) {
+        updates.scenes = scenesPatch;
+      }
+      if (payload.imageModel && payload.imageModel !== existing.imageModel) {
+        updates.imageModel = payload.imageModel;
+      }
+      if (payload.confirmedProfile) {
+        updates.confirmedProfile = payload.confirmedProfile;
+      }
+      if (
+        payload.gatheringMessagesAppend &&
+        payload.gatheringMessagesAppend.length > 0
+      ) {
+        updates.gatheringMessages = [
+          ...(existing.gatheringMessages ?? []),
+          ...payload.gatheringMessagesAppend,
+        ];
+      }
+      // gatheringSummary is intentionally never touched here — the original
+      // stays the source of truth; appended review-chat messages live in
+      // gatheringMessages and feed the next regen via the live summary.
+
+      const updated = await updateCharacter(payload.id, updates);
+      return { success: true as const, stored: updated };
+    }
+  );
+
+  ipcMain.handle(
+    "characters:appendGatheringMessages",
+    async (
+      _event,
+      payload: { id: string; messages: UIMessage[] }
+    ): Promise<StoredCharacter | null> => {
+      if (!payload.messages || payload.messages.length === 0) {
+        return getCharacter(payload.id);
+      }
+      const existing = await getCharacter(payload.id);
+      if (!existing) return null;
+      return updateCharacter(payload.id, {
+        gatheringMessages: [
+          ...(existing.gatheringMessages ?? []),
+          ...payload.messages,
+        ],
+      });
     }
   );
 

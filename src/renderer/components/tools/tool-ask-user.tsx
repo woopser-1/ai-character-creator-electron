@@ -5,6 +5,7 @@ import {
 	AutopilotBadge,
 	isAutopilot,
 } from "@/components/tools/autopilot-badge";
+import { ToolRewindButton } from "@/components/tools/tool-rewind-button";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -13,6 +14,7 @@ interface ToolAskUserProps {
 	question: string;
 	submitted?: boolean;
 	submittedValue?: string;
+	onRewind?: () => void;
 }
 
 export function ToolAskUser({
@@ -20,13 +22,17 @@ export function ToolAskUser({
 	onSubmit,
 	submitted,
 	submittedValue,
+	onRewind,
 }: ToolAskUserProps) {
 	const [value, setValue] = useState("");
 
 	if (submitted) {
 		return (
 			<div className="rounded-xl bg-muted p-4 ring-1 ring-foreground/10">
-				<p className="mb-2.5 text-muted-foreground text-sm">{question}</p>
+				<div className="mb-2.5 flex items-start justify-between gap-2">
+					<p className="text-muted-foreground text-sm">{question}</p>
+					{onRewind && <ToolRewindButton answered onClick={onRewind} />}
+				</div>
 				{isAutopilot(submittedValue) ? (
 					<AutopilotBadge />
 				) : (
@@ -38,7 +44,10 @@ export function ToolAskUser({
 
 	return (
 		<div className="animate-tool-in space-y-3 rounded-xl bg-card p-4 glow-rim">
-			<p className="font-medium text-sm">{question}</p>
+			<div className="flex items-start justify-between gap-2">
+				<p className="font-medium text-sm">{question}</p>
+				{onRewind && <ToolRewindButton onClick={onRewind} />}
+			</div>
 			<Textarea
 				onChange={(e) => setValue(e.target.value)}
 				placeholder="Type your answer…"

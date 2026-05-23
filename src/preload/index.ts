@@ -226,6 +226,27 @@ const api = {
       | { success: true; stored: StoredCharacter }
       | { success: false; error: string }
     > => ipcRenderer.invoke("characters:regenerateVisualOnly", payload),
+    regeneratePartial: (payload: {
+      id: string;
+      steps: CharacterStepId[];
+      regenerateScenes: boolean;
+      gatheringSummary: string;
+      gatheringMessagesAppend?: UIMessage[];
+      confirmedMeasurements?: Measurements;
+      confirmedProfile?: ConfirmedProfile;
+      imageModel?: ImageModel;
+    }): Promise<
+      | { success: true; stored: StoredCharacter }
+      | { success: false; error: string }
+    > => ipcRenderer.invoke("characters:regeneratePartial", payload),
+    appendGatheringMessages: (
+      id: string,
+      messages: UIMessage[]
+    ): Promise<StoredCharacter | null> =>
+      ipcRenderer.invoke("characters:appendGatheringMessages", {
+        id,
+        messages,
+      }),
     exportToFile: (ids: string[]): Promise<ExportResponse> =>
       ipcRenderer.invoke("characters:export", { ids }),
     importFromFile: (): Promise<ImportResponse> =>

@@ -16,7 +16,6 @@ import {
 	Sparkles,
 	Trash2,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useCallback, useEffect, useState } from "react";
 import { AddSceneDialog } from "@/components/add-scene-dialog";
 import {
@@ -208,28 +207,33 @@ export function CharacterDetailPage({ id }: { id: string }) {
 			if (!newMessage) return;
 			const truncatedMessages = messages.slice(0, userIdx);
 
-			const seed: ReplaySeed =
-				phase === "character"
-					? {
-							kind: "rewind-character",
-							draftId: nanoid(),
-							sourceCharacterId: data.id,
-							difficulty: data.difficulty,
-							messageLength: data.messageLength,
-							imageModel: data.imageModel,
-							truncatedMessages,
-							newMessage,
-						}
-					: {
-							kind: "rewind-scenes",
-							originCharacterId: data.id,
-							character: data.character,
-							difficulty: data.difficulty,
-							messageLength: data.messageLength,
-							imageModel: data.imageModel,
-							truncatedMessages,
-							newMessage,
-						};
+			// Character-gathering rewind goes IN PLACE through the Regenerate page:
+			// the truncated transcript seeds the review chat and the eventual regen
+			// patches this same character (no fork). Scene-gathering rewinds still
+			// flow through /create — they only rerun scene generation and don't
+			// touch the character itself.
+			if (phase === "character") {
+				const seed: ReplaySeed = {
+					kind: "rewind-regenerate",
+					characterId: data.id,
+					truncatedMessages,
+					newMessage,
+				};
+				setReplaySeed(seed);
+				navigate(`/regenerate/${data.id}`);
+				return;
+			}
+
+			const seed: ReplaySeed = {
+				kind: "rewind-scenes",
+				originCharacterId: data.id,
+				character: data.character,
+				difficulty: data.difficulty,
+				messageLength: data.messageLength,
+				imageModel: data.imageModel,
+				truncatedMessages,
+				newMessage,
+			};
 			setReplaySeed(seed);
 			navigate("/create");
 		},

@@ -1,7 +1,6 @@
 import {
 	ArrowLeft,
 	Bot,
-	History,
 	Loader2,
 	RefreshCw,
 	Search,
@@ -19,9 +18,11 @@ import { ProfileReview } from "@/components/profile-review";
 import { Button } from "@/components/ui/button";
 import { useAgentChat } from "@/hooks/use-agent-chat";
 import { useChatAutopilot } from "@/hooks/use-chat-autopilot";
+import { consumeReplaySeed } from "@/lib/gathering-replay";
 import { navigate } from "@/lib/router";
 import {
 	type CharacterProfilePreview,
+	type CharacterStepId,
 	type ConfirmedProfile,
 	getFullName,
 	getStoredImageModel,
@@ -29,9 +30,49 @@ import {
 	type Measurements,
 	type StoredCharacter,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Phase = "reviewing" | "profile-review" | "regenerating" | "done";
 type GatheringSource = "review-chat" | "stored";
+
+/** Steps the user can opt-in to regenerating. `scenes` is a meta-step. */
+type RegenStep = CharacterStepId | "scenes";
+
+const STEP_LABELS: Record<RegenStep, { title: string; hint: string }> = {
+	visual: {
+		title: "Visual",
+		hint: "Appearance, image prompts, OurDream fields",
+	},
+	scenario: {
+		title: "Scenario",
+		hint: "Opening scenario text the chat starts in",
+	},
+	personality: {
+		title: "Personality",
+		hint: "additionalPersonalityDetails behavioral spec",
+	},
+	extras: {
+		title: "Background",
+		hint: "extraDetails lore and biography",
+	},
+	light: {
+		title: "Mood & difficulty axes",
+		hint: "moodAxes + difficulty + intimacy profiles",
+	},
+	scenes: {
+		title: "Scenes",
+		hint: "Rewrites all scene image prompts (same scene names)",
+	},
+};
+
+const ORDERED_STEPS: RegenStep[] = [
+	"visual",
+	"scenario",
+	"personality",
+	"extras",
+	"light",
+	"scenes",
+];
 
 function summarizeChat(
 	messages: ReturnType<typeof useAgentChat>["messages"],
@@ -68,6 +109,9 @@ export function RegeneratePage({ id }: { id: string }) {
 	const [imageModel, setImageModel] = useState<ImageModel | null>(null);
 	const [gatheringSource, setGatheringSource] =
 		useState<GatheringSource>("review-chat");
+	const [selectedSteps, setSelectedSteps] = useState<Set<RegenStep>>(
+		() => new Set<RegenStep>(["visual"]),
+	);
 
 	const reviewChat = useAgentChat();
 	const hasStarted = useRef(false);
@@ -93,6 +137,26 @@ export function RegeneratePage({ id }: { id: string }) {
 	useEffect(() => {
 		if (!data || hasStarted.current) return;
 		hasStarted.current = true;
+		// If we arrived via an in-place rewind from CharacterDetail, replay the
+		// truncated transcript into the review chat so the user can resume from
+		// the chosen point. Otherwise start fresh with the standard prompt.
+		const seed = consumeReplaySeed();
+		if (
+			seed &&
+			seed.kind === "rewind-regenerate" &&
+			seed.characterId === data.id
+		) {
+			void reviewChat.seedReplay({
+				payload: {
+					flow: "gather-regenerate",
+					character: data,
+					initialUserMessage: seed.newMessage,
+				},
+				truncatedMessages: seed.truncatedMessages,
+				newMessage: seed.newMessage,
+			});
+			return;
+		}
 		void reviewChat.start({
 			flow: "gather-regenerate",
 			character: data,
@@ -101,10 +165,17 @@ export function RegeneratePage({ id }: { id: string }) {
 	}, [data, reviewChat]);
 
 	const gatheringSummary = useMemo(() => {
-		if (gatheringSource === "stored" && data?.gatheringSummary) {
-			return data.gatheringSummary;
-		}
-		return reviewChat.finalSummary ?? summarizeChat(reviewChat.messages);
+		// Always merge the stored gathering (the source of truth) with anything
+		// new said in the review chat — that way regenerations stay grounded in
+		// the original character while picking up the latest tweaks.
+		const stored = data?.gatheringSummary ?? "";
+		const reviewLive =
+			gatheringSource === "review-chat"
+				? (reviewChat.finalSummary ?? summarizeChat(reviewChat.messages))
+				: "";
+		if (!stored) return reviewLive;
+		if (!reviewLive) return stored;
+		return `${stored}\n\n---\n\n[Regeneration review chat]\n${reviewLive}`;
 	}, [
 		gatheringSource,
 		data?.gatheringSummary,
@@ -112,29 +183,92 @@ export function RegeneratePage({ id }: { id: string }) {
 		reviewChat.messages,
 	]);
 
-	const handleStartProfileReview = useCallback(
-		async (source: GatheringSource = "review-chat") => {
+	const toggleStep = useCallback((step: RegenStep) => {
+		setSelectedSteps((prev) => {
+			const next = new Set(prev);
+			if (next.has(step)) next.delete(step);
+			else next.add(step);
+			return next;
+		});
+	}, []);
+
+	const visualSelected = selectedSteps.has("visual");
+	const hasAnySelection = selectedSteps.size > 0;
+
+	const runRegeneration = useCallback(
+		async ({
+			measurements,
+			profile,
+		}: {
+			measurements?: Measurements;
+			profile?: ConfirmedProfile;
+		}) => {
 			if (!data) return;
-			setProfileError(undefined);
+			setPhase("regenerating");
+			setGenerating(true);
+			try {
+				const effectiveImageModel = imageModel ?? getStoredImageModel(data);
+				const characterSteps = ORDERED_STEPS.filter(
+					(s): s is CharacterStepId =>
+						s !== "scenes" && selectedSteps.has(s),
+				);
+				const regenerateScenes = selectedSteps.has("scenes");
+
+				// Only append the review chat to the stored transcript when the user
+				// actually used it as input — keeps the transcript clean on the
+				// "Original gathering only" path.
+				const appendMessages =
+					gatheringSource === "review-chat" &&
+					reviewChat.messages.length > 1
+						? reviewChat.messages
+						: undefined;
+
+				const res = await window.api.characters.regeneratePartial({
+					id: data.id,
+					steps: characterSteps,
+					regenerateScenes,
+					gatheringSummary,
+					gatheringMessagesAppend: appendMessages,
+					confirmedMeasurements: measurements,
+					confirmedProfile: profile,
+					imageModel: effectiveImageModel,
+				});
+				if (!res.success) {
+					throw new Error(res.error);
+				}
+				setPhase("done");
+				navigate(`/character/${res.stored.id}`);
+			} catch (err) {
+				console.error("Regeneration failed:", err);
+				setPhase(visualSelected ? "profile-review" : "reviewing");
+			} finally {
+				setGenerating(false);
+			}
+		},
+		[
+			data,
+			imageModel,
+			selectedSteps,
+			gatheringSource,
+			reviewChat.messages,
+			gatheringSummary,
+			visualSelected,
+		],
+	);
+
+	const handleConfirm = useCallback(async () => {
+		if (!data || !hasAnySelection) return;
+		setProfileError(undefined);
+
+		// Visual regen needs measurements + a confirmed profile (they steer the
+		// image prompts). Other steps can run straight from the gathering.
+		if (visualSelected) {
 			setProfileLoading(true);
 			setInferredProfile(undefined);
-			setGatheringSource(source);
 			setPhase("profile-review");
-
-			const effectiveSummary =
-				source === "stored" && data.gatheringSummary
-					? data.gatheringSummary
-					: (reviewChat.finalSummary ?? summarizeChat(reviewChat.messages));
-
 			try {
-				if (typeof window.api.generate.inferProfile !== "function") {
-					setProfileError(
-						"Profile inference is unavailable. Restart the app so the preload bridge picks up the latest changes.",
-					);
-					return;
-				}
 				const res = await window.api.generate.inferProfile({
-					gatheringSummary: effectiveSummary,
+					gatheringSummary,
 					difficulty: data.difficulty,
 				});
 				if (res.success) {
@@ -148,11 +282,12 @@ export function RegeneratePage({ id }: { id: string }) {
 			} finally {
 				setProfileLoading(false);
 			}
-		},
-		[data, reviewChat.finalSummary, reviewChat.messages],
-	);
+			return;
+		}
+		await runRegeneration({});
+	}, [data, hasAnySelection, visualSelected, gatheringSummary, runRegeneration]);
 
-	const handleConfirmRegenerate = useCallback(
+	const handleConfirmProfile = useCallback(
 		async ({
 			measurements,
 			profile,
@@ -160,95 +295,19 @@ export function RegeneratePage({ id }: { id: string }) {
 			measurements: Measurements;
 			profile: ConfirmedProfile;
 		}) => {
-			if (!data) return;
-			setPhase("regenerating");
-			setGenerating(true);
-			try {
-				const runId = `regen-${Date.now()}`;
-				const effectiveImageModel = imageModel ?? getStoredImageModel(data);
-
-				if (gatheringSource === "stored") {
-					const visualResult = await window.api.characters.regenerateVisualOnly(
-						{
-							id: data.id,
-							gatheringSummary,
-							confirmedMeasurements: measurements,
-							confirmedProfile: profile,
-							imageModel: effectiveImageModel,
-						},
-					);
-					if (!visualResult.success) {
-						throw new Error(visualResult.error);
-					}
-					const sceneResult = await window.api.generate.scenes({
-						runId: `${runId}-scenes`,
-						character: visualResult.stored.character,
-						gatheringSummary,
-						imageModel: effectiveImageModel,
-					});
-					if (!sceneResult.success) {
-						throw new Error(sceneResult.error);
-					}
-					await window.api.characters.updateScenes(
-						visualResult.stored.id,
-						sceneResult.scenes,
-					);
-					setPhase("done");
-					navigate(`/character/${visualResult.stored.id}`);
-					return;
-				}
-
-				const charResult = await window.api.generate.characterAll({
-					runId,
-					difficulty: data.difficulty,
-					gatheringSummary,
-					imageModel: effectiveImageModel,
-					confirmedMeasurements: measurements,
-					confirmedProfile: profile,
-				});
-				if (!charResult.success) {
-					throw new Error(charResult.error);
-				}
-				const sceneResult = await window.api.generate.scenes({
-					runId: `${runId}-scenes`,
-					character: charResult.stored.character,
-					gatheringSummary,
-					imageModel: effectiveImageModel,
-				});
-				if (!sceneResult.success) {
-					throw new Error(sceneResult.error);
-				}
-				await window.api.characters.updateScenes(
-					charResult.stored.id,
-					sceneResult.scenes,
-				);
-				await window.api.characters.updateImageModel(
-					charResult.stored.id,
-					effectiveImageModel,
-				);
-				setPhase("done");
-				navigate(`/character/${charResult.stored.id}`);
-			} catch (err) {
-				console.error("Regeneration failed:", err);
-				setPhase("profile-review");
-			} finally {
-				setGenerating(false);
-			}
+			await runRegeneration({ measurements, profile });
 		},
-		[data, gatheringSummary, imageModel, gatheringSource],
+		[runRegeneration],
 	);
 
 	const handleBackToReview = useCallback(() => {
 		setPhase("reviewing");
 		setInferredProfile(undefined);
 		setProfileError(undefined);
-		setGatheringSource("review-chat");
 	}, []);
 
 	const isStreaming =
 		reviewChat.status === "streaming" || reviewChat.status === "submitted";
-	const showRegenerate =
-		phase === "reviewing" && reviewChat.messages.length > 1 && !isStreaming;
 
 	if (notFound) {
 		return (
@@ -337,49 +396,24 @@ export function RegeneratePage({ id }: { id: string }) {
 					<ChatDock
 						disabled={isStreaming || phase !== "reviewing"}
 						extraAbove={
-							<div className="flex flex-col gap-2">
-								{data.gatheringSummary &&
-									phase === "reviewing" &&
-									!isStreaming && (
-										<div className="flex flex-col gap-1">
-											<Button
-												className="w-full"
-												disabled={generating}
-												onClick={() => void handleStartProfileReview("stored")}
-												variant="outline"
-											>
-												<History className="mr-2 h-4 w-4" />
-												Regenerate visual and scenes from original gathering
-											</Button>
-											<p className="px-1 text-[11px] text-muted-foreground leading-snug">
-												Re-runs only the appearance and scene prompts using the
-												saved gathering. Personality, scenario, mood axes, and
-												lore stay unchanged.
-											</p>
-										</div>
-									)}
-								<div className="flex items-center gap-2">
-									{showRegenerate && (
-										<Button
-											className="glow-lg flex-1"
-											disabled={generating}
-											onClick={() =>
-												void handleStartProfileReview("review-chat")
-											}
-										>
-											<RefreshCw className="mr-2 h-4 w-4" />
-											Review profile and regenerate
-										</Button>
-									)}
-									<div className={showRegenerate ? "" : "ml-auto"}>
-										<AutopilotPill
-											disabled={generating || phase !== "reviewing"}
-											enabled={autopilot}
-											onToggle={setAutopilot}
-										/>
-									</div>
-								</div>
-							</div>
+							<RegenPanel
+								data={data}
+								source={gatheringSource}
+								onSourceChange={setGatheringSource}
+								selectedSteps={selectedSteps}
+								onToggleStep={toggleStep}
+								onConfirm={() => void handleConfirm()}
+								confirmDisabled={
+									generating ||
+									isStreaming ||
+									!hasAnySelection ||
+									(gatheringSource === "review-chat" &&
+										reviewChat.messages.length <= 1)
+								}
+								autopilot={autopilot}
+								onAutopilotToggle={setAutopilot}
+								autopilotDisabled={generating || phase !== "reviewing"}
+							/>
 						}
 						onSend={(text) => void reviewChat.sendMessage({ text })}
 						placeholder="Describe what you want to change…"
@@ -402,6 +436,7 @@ export function RegeneratePage({ id }: { id: string }) {
 							addToolOutput={reviewChat.addToolOutput}
 							key={msg.id}
 							message={msg}
+							onRewind={reviewChat.rewindTo}
 						/>
 					))}
 
@@ -412,7 +447,7 @@ export function RegeneratePage({ id }: { id: string }) {
 							error={profileError}
 							difficulty={data.difficulty}
 							gatheringSummary={gatheringSummary}
-							onConfirm={handleConfirmRegenerate}
+							onConfirm={handleConfirmProfile}
 							onBack={handleBackToReview}
 							backLabel="Back to chat"
 							confirmLabel="Confirm and regenerate"
@@ -453,5 +488,158 @@ export function RegeneratePage({ id }: { id: string }) {
 				</div>
 			</ChatContainer>
 		</>
+	);
+}
+
+interface RegenPanelProps {
+	data: StoredCharacter;
+	source: GatheringSource;
+	onSourceChange: (next: GatheringSource) => void;
+	selectedSteps: Set<RegenStep>;
+	onToggleStep: (step: RegenStep) => void;
+	onConfirm: () => void;
+	confirmDisabled: boolean;
+	autopilot: boolean;
+	onAutopilotToggle: (next: boolean) => void;
+	autopilotDisabled: boolean;
+}
+
+function RegenPanel({
+	data,
+	source,
+	onSourceChange,
+	selectedSteps,
+	onToggleStep,
+	onConfirm,
+	confirmDisabled,
+	autopilot,
+	onAutopilotToggle,
+	autopilotDisabled,
+}: RegenPanelProps) {
+	const hasOriginalGathering = !!data.gatheringSummary;
+	return (
+		<div className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-card/40 p-3">
+			{hasOriginalGathering && (
+				<section className="flex flex-col gap-1.5">
+					<span className="eyebrow text-foreground/55">Gathering source</span>
+					<div className="flex flex-wrap gap-1.5">
+						<SourcePill
+							active={source === "stored"}
+							label="Original gathering only"
+							onClick={() => onSourceChange("stored")}
+						/>
+						<SourcePill
+							active={source === "review-chat"}
+							label="Original + this review chat"
+							onClick={() => onSourceChange("review-chat")}
+						/>
+					</div>
+				</section>
+			)}
+
+			<section className="flex flex-col gap-1.5">
+				<span className="eyebrow text-foreground/55">
+					What to regenerate
+				</span>
+				<div className="flex flex-wrap gap-1.5">
+					{ORDERED_STEPS.map((step) => {
+						const meta = STEP_LABELS[step];
+						return (
+							<StepPill
+								active={selectedSteps.has(step)}
+								hint={meta.hint}
+								key={step}
+								label={meta.title}
+								onClick={() => onToggleStep(step)}
+							/>
+						);
+					})}
+				</div>
+			</section>
+
+			<div className="flex items-center gap-2 pt-1">
+				<Button
+					className="glow-lg flex-1"
+					disabled={confirmDisabled}
+					onClick={onConfirm}
+				>
+					<RefreshCw className="mr-2 h-4 w-4" />
+					Confirm and regenerate
+				</Button>
+				<AutopilotPill
+					disabled={autopilotDisabled}
+					enabled={autopilot}
+					onToggle={onAutopilotToggle}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function SourcePill({
+	active,
+	label,
+	onClick,
+}: {
+	active: boolean;
+	label: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			aria-pressed={active}
+			className={cn(
+				"rounded-full px-3 py-1.5 font-medium text-[0.8125rem] outline-none transition-all duration-150 ease-out focus-visible:ring-3 focus-visible:ring-primary/40",
+				active
+					? "bg-primary/15 text-foreground ring-1 ring-primary/40 glow-xs"
+					: "bg-secondary text-foreground/70 ring-1 ring-foreground/10 hover:text-foreground hover:ring-foreground/20",
+			)}
+			onClick={onClick}
+			type="button"
+		>
+			{label}
+		</button>
+	);
+}
+
+function StepPill({
+	active,
+	label,
+	hint,
+	onClick,
+}: {
+	active: boolean;
+	label: string;
+	hint: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			aria-pressed={active}
+			className={cn(
+				"group flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] outline-none transition-all duration-150 ease-out focus-visible:ring-3 focus-visible:ring-primary/40",
+				active
+					? "bg-primary/15 text-foreground ring-1 ring-primary/40 glow-xs"
+					: "bg-secondary text-foreground/70 ring-1 ring-foreground/10 hover:text-foreground hover:ring-foreground/20",
+			)}
+			onClick={onClick}
+			title={hint}
+			type="button"
+		>
+			<span
+				aria-hidden
+				className={cn(
+					"flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-colors",
+					active
+						? "border-primary/60 bg-primary/30"
+						: "border-foreground/25 bg-transparent",
+				)}
+			>
+				{active && (
+					<span className="h-1.5 w-1.5 rounded-[1px] bg-foreground" />
+				)}
+			</span>
+			<span className="font-medium">{label}</span>
+		</button>
 	);
 }

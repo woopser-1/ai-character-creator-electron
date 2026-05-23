@@ -39,7 +39,23 @@ export interface ScenesRewindSeed {
 	newMessage: string;
 }
 
-export type ReplaySeed = CharacterRewindSeed | ScenesRewindSeed;
+/**
+ * Reset the gathering of an existing character in place from a chosen point.
+ * The user clicked Rewind on a saved character's transcript; we open the
+ * Regenerate page with the truncated transcript replayed into the review
+ * chat. The eventual regeneration patches the SAME character id — no fork.
+ */
+export interface RegenerateRewindSeed {
+	kind: "rewind-regenerate";
+	characterId: string;
+	truncatedMessages: UIMessage[];
+	newMessage: string;
+}
+
+export type ReplaySeed =
+	| CharacterRewindSeed
+	| ScenesRewindSeed
+	| RegenerateRewindSeed;
 
 export function setReplaySeed(seed: ReplaySeed): void {
 	try {

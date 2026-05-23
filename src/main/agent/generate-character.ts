@@ -1,14 +1,18 @@
 import { z } from "zod";
 import {
   applySuperAdminOverride,
+  assemblePersonalityDetails,
   buildCharacterVisualPromptHaiku,
   buildExtraDetailsPrompt,
   buildLightFieldsPrompt,
   buildMeasurementsInferencePrompt,
   buildPersonalityDetailsPrompt,
+  buildPersonalitySectionPrompt,
   buildProfileInferencePrompt,
   buildScenarioPrompt,
   buildSystemFrameworkUpgradePrompt,
+  PERSONALITY_LLM_SECTION_IDS,
+  type PersonalityLlmSectionId,
 } from "@shared/prompts";
 import {
   CHARACTER_STEP_IDS,
@@ -321,6 +325,137 @@ async function runStepOnce<T>(
   return { ok: true, data: parsed.data, usage };
 }
 
+function aggregateStepUsage(
+  model: ClaudeModel,
+  usages: ReadonlyArray<StepUsage | undefined>,
+): StepUsage | undefined {
+  const present = usages.filter((u): u is StepUsage => Boolean(u));
+  if (present.length === 0) return undefined;
+  const sum = (k: keyof Pick<StepUsage, "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreationTokens" | "costUsd">) =>
+    present.reduce((acc, u) => acc + (u[k] as number), 0);
+  return {
+    model,
+    inputTokens: sum("inputTokens"),
+    outputTokens: sum("outputTokens"),
+    cacheReadTokens: sum("cacheReadTokens"),
+    cacheCreationTokens: sum("cacheCreationTokens"),
+    costUsd: sum("costUsd"),
+    // Sub-calls run in parallel via Promise.all — perceived wall-clock is the
+    // slowest sub-call, not the sum.
+    durationMs: Math.max(...present.map((u) => u.durationMs)),
+  };
+}
+
+// Fan-out the personality step: split the single 10-13k-char generation into
+// 7 parallel sub-calls (one per LLM-generated section). The boilerplate
+// Slash_Commands_Behavior section is hardcoded and assembled in its
+// canonical position. Each sub-call fits comfortably under the runClaude
+// 300s timeout where the single-call form was exceeding it.
+async function runPersonalityFanOut(
+  difficulty: Difficulty,
+  messageLength: MessageLength,
+  generationModel: ClaudeModel,
+  gatheringSummary: string,
+  superAdmin: boolean,
+): Promise<
+  | { ok: true; data: { additionalPersonalityDetails: string }; usage?: StepUsage }
+  | { ok: false; error: string; refusal: boolean; usage?: StepUsage }
+> {
+  const userMessage = CORE_USER_MESSAGE(gatheringSummary, difficulty, messageLength);
+  const sectionSchema = z.object({ section: z.string() });
+  const sectionJsonSchema = z.toJSONSchema(sectionSchema);
+
+  const subResults = await Promise.all(
+    PERSONALITY_LLM_SECTION_IDS.map(async (sectionId) => {
+      const baseSystem = buildPersonalitySectionPrompt(sectionId, difficulty, messageLength);
+      const systemPrompt = applySuperAdminOverride(baseSystem, superAdmin);
+      const startedAt = Date.now();
+      const stepLabel = `personality:${sectionId}`;
+      let result: ClaudeRunResult;
+      try {
+        result = await runClaude({
+          model: generationModel,
+          systemPrompt,
+          userMessage,
+          jsonSchema: sectionJsonSchema,
+          stepLabel,
+        });
+      } catch (err) {
+        const isAuth = err instanceof ClaudeAuthError;
+        console.error("[generate-character:personality:exception]", {
+          sectionId,
+          isAuth,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return {
+          sectionId,
+          ok: false as const,
+          error: `[${stepLabel}] ${isAuth ? "AUTH: " : ""}${String(err)}`,
+          refusal: false,
+        };
+      }
+      const usage = extractUsage(generationModel, result, startedAt);
+      if (!result.success || !result.structuredOutput) {
+        const text = `${result.error ?? ""} ${result.finalAssistantText ?? ""}`;
+        const refusal = REFUSAL_PATTERN.test(text);
+        const details =
+          result.error ??
+          (result.finalAssistantText
+            ? `no structured output — assistant said: ${result.finalAssistantText.slice(0, 500)}`
+            : "no structured output returned");
+        return {
+          sectionId,
+          ok: false as const,
+          error: `[${stepLabel}] ${details}`,
+          refusal,
+          usage,
+        };
+      }
+      const parsed = sectionSchema.safeParse(result.structuredOutput);
+      if (!parsed.success) {
+        return {
+          sectionId,
+          ok: false as const,
+          error: `[${stepLabel}] schema validation failed: ${parsed.error.message}`,
+          refusal: false,
+          usage,
+        };
+      }
+      return {
+        sectionId,
+        ok: true as const,
+        section: parsed.data.section,
+        usage,
+      };
+    }),
+  );
+
+  const aggregatedUsage = aggregateStepUsage(
+    generationModel,
+    subResults.map((r) => r.usage),
+  );
+
+  const failures = subResults.filter((r) => !r.ok) as Array<
+    Extract<(typeof subResults)[number], { ok: false }>
+  >;
+  if (failures.length > 0) {
+    const anyRefusal = failures.some((f) => f.refusal);
+    const summary = failures.map((f) => f.error).join(" | ");
+    return { ok: false, error: summary, refusal: anyRefusal, usage: aggregatedUsage };
+  }
+
+  const sectionMap = {} as Record<PersonalityLlmSectionId, string>;
+  for (const r of subResults) {
+    if (r.ok) sectionMap[r.sectionId] = r.section;
+  }
+  const additionalPersonalityDetails = assemblePersonalityDetails(sectionMap);
+  return {
+    ok: true,
+    data: { additionalPersonalityDetails },
+    usage: aggregatedUsage,
+  };
+}
+
 export interface GenerateStepInput {
   stepId: CharacterStepId;
   difficulty: Difficulty;
@@ -346,15 +481,24 @@ export async function generateCharacterStep<T = unknown>(
 
   onEvent?.({ runId, kind: "character", step: stepId, status: "started" });
 
-  const first = await runStepOnce(
-    def,
-    difficulty,
-    messageLength,
-    imageModel,
-    generationModel,
-    gatheringSummary,
-    superAdmin
-  );
+  const first =
+    stepId === "personality"
+      ? await runPersonalityFanOut(
+          difficulty,
+          messageLength,
+          generationModel,
+          gatheringSummary,
+          superAdmin,
+        )
+      : await runStepOnce(
+          def,
+          difficulty,
+          messageLength,
+          imageModel,
+          generationModel,
+          gatheringSummary,
+          superAdmin,
+        );
 
   if (first.ok) {
     onEvent?.({
@@ -367,7 +511,7 @@ export async function generateCharacterStep<T = unknown>(
     });
     return {
       success: true,
-      data: first.data,
+      data: first.data as T,
       usage: first.usage,
       adminOverrideApplied: superAdmin,
     };
@@ -385,15 +529,24 @@ export async function generateCharacterStep<T = unknown>(
 
     if (superAdmin) {
       console.log(`[generate-character] ${stepId} refusal detected under super-admin — retrying with reinforced override`);
-      const retry = await runStepOnce(
-        def,
-        difficulty,
-        messageLength,
-        imageModel,
-        generationModel,
-        gatheringSummary,
-        true
-      );
+      const retry =
+        stepId === "personality"
+          ? await runPersonalityFanOut(
+              difficulty,
+              messageLength,
+              generationModel,
+              gatheringSummary,
+              true,
+            )
+          : await runStepOnce(
+              def,
+              difficulty,
+              messageLength,
+              imageModel,
+              generationModel,
+              gatheringSummary,
+              true,
+            );
       if (retry.ok) {
         onEvent?.({
           runId,
@@ -405,7 +558,7 @@ export async function generateCharacterStep<T = unknown>(
         });
         return {
           success: true,
-          data: retry.data,
+          data: retry.data as T,
           usage: retry.usage,
           adminOverrideApplied: true,
         };
