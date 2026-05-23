@@ -1,11 +1,7 @@
 import { Check, Plus, Wand2, X } from "lucide-react";
 import { useState } from "react";
-import {
-	AUTOPILOT_SENTINEL,
-	AutopilotBadge,
-	isAutopilot,
-} from "@/components/tools/autopilot-badge";
-import { ToolRewindButton } from "@/components/tools/tool-rewind-button";
+import { AUTOPILOT_SENTINEL } from "@/components/tools/autopilot-badge";
+import { ToolFrame } from "@/components/tools/tool-frame";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -65,42 +61,30 @@ export function ToolSelectMultiple({
 		});
 	}
 
-	if (submitted) {
-		return (
-			<div className="rounded-xl bg-muted p-4 ring-1 ring-foreground/10">
-				<div className="mb-2.5 flex items-start justify-between gap-2">
-					<p className="text-muted-foreground text-sm">{question}</p>
-					{onRewind && <ToolRewindButton answered onClick={onRewind} />}
-				</div>
-				{isAutopilot(submittedValue) ? (
-					<AutopilotBadge />
-				) : (
-					<div className="flex flex-wrap gap-1.5">
-						{(submittedValue ?? "")
-							.split("\n")
-							.map((v) => v.trim())
-							.filter(Boolean)
-							.map((v) => (
-								<span
-									className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2.5 py-1 font-medium text-foreground text-xs ring-1 ring-primary/30"
-									key={v}
-								>
-									<Check className="h-2.5 w-2.5 text-primary" />
-									{v}
-								</span>
-							))}
-					</div>
-				)}
-			</div>
-		);
-	}
-
 	return (
-		<div className="animate-tool-in space-y-3 rounded-xl bg-card p-4 glow-rim">
-			<div className="flex items-start justify-between gap-2">
-				<p className="font-medium text-sm">{question}</p>
-				{onRewind && <ToolRewindButton onClick={onRewind} />}
-			</div>
+		<ToolFrame
+			answeredView={
+				<div className="flex flex-wrap gap-1.5">
+					{(submittedValue ?? "")
+						.split("\n")
+						.map((v) => v.trim())
+						.filter(Boolean)
+						.map((v) => (
+							<span
+								className="inline-flex items-center gap-1 rounded-lg bg-secondary px-2.5 py-1 font-medium text-foreground text-xs ring-1 ring-primary/30"
+								key={v}
+							>
+								<Check className="h-2.5 w-2.5 text-primary" />
+								{v}
+							</span>
+						))}
+				</div>
+			}
+			onRewind={onRewind}
+			question={question}
+			submitted={submitted}
+			submittedValue={submittedValue}
+		>
 			<div className="flex flex-wrap gap-2">
 				{options.map((option) => (
 					<button
@@ -207,6 +191,6 @@ export function ToolSelectMultiple({
 					</Button>
 				)}
 			</div>
-		</div>
+		</ToolFrame>
 	);
 }

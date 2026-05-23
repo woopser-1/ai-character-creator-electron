@@ -19,6 +19,7 @@ import type {
   GenerateScenesResponse,
   GenerateSingleSceneResponse,
 } from "@shared/generate";
+import type { CharacterResult, GroupChatResult } from "@shared/result";
 import type {
   AppSettings,
   Character,
@@ -89,17 +90,11 @@ const api = {
     updateOurdreamUrl: (
       id: string,
       ourdreamUrl: string | null
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:updateOurdreamUrl", { id, ourdreamUrl }),
     refreshProfileImage: (
       id: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > => ipcRenderer.invoke("characters:refreshProfileImage", { id }),
+    ): Promise<CharacterResult> => ipcRenderer.invoke("characters:refreshProfileImage", { id }),
     updateScenes: (id: string, scenes: Scene[]): Promise<StoredCharacter | null> =>
       ipcRenderer.invoke("characters:updateScenes", { id, scenes }),
     updateGatheringMessages: (
@@ -125,10 +120,7 @@ const api = {
       id: string,
       messageLength: MessageLength,
       gatheringSummary: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:updateMessageLength", {
         id,
         messageLength,
@@ -137,10 +129,7 @@ const api = {
     regenerateMoodAxes: (
       id: string,
       gatheringSummary: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:regenerateMoodAxes", {
         id,
         gatheringSummary,
@@ -148,10 +137,7 @@ const api = {
     upgradeSystemFramework: (
       id: string,
       gatheringSummary?: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:upgradeSystemFramework", {
         id,
         gatheringSummary,
@@ -159,10 +145,7 @@ const api = {
     refreshVivid3Physical: (
       id: string,
       gatheringSummary?: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:refreshVivid3Physical", {
         id,
         gatheringSummary,
@@ -171,10 +154,7 @@ const api = {
       id: string,
       path: string,
       value: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:updateCharacterField", {
         id,
         path,
@@ -185,10 +165,7 @@ const api = {
       sceneIndex: number,
       field: "prompt" | "negativePrompt",
       value: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:updateSceneField", {
         id,
         sceneIndex,
@@ -199,10 +176,7 @@ const api = {
       id: string,
       difficulty: Difficulty,
       gatheringSummary: string
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:regenerateForDifficulty", {
         id,
         difficulty,
@@ -211,10 +185,7 @@ const api = {
     regenerateScenes: (
       id: string,
       imageModel?: ImageModel
-    ): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > =>
+    ): Promise<CharacterResult> =>
       ipcRenderer.invoke("characters:regenerateScenes", { id, imageModel }),
     regenerateVisualOnly: (payload: {
       id: string;
@@ -222,10 +193,7 @@ const api = {
       confirmedMeasurements?: Measurements;
       confirmedProfile?: ConfirmedProfile;
       imageModel?: ImageModel;
-    }): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > => ipcRenderer.invoke("characters:regenerateVisualOnly", payload),
+    }): Promise<CharacterResult> => ipcRenderer.invoke("characters:regenerateVisualOnly", payload),
     regeneratePartial: (payload: {
       id: string;
       steps: CharacterStepId[];
@@ -235,10 +203,7 @@ const api = {
       confirmedMeasurements?: Measurements;
       confirmedProfile?: ConfirmedProfile;
       imageModel?: ImageModel;
-    }): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > => ipcRenderer.invoke("characters:regeneratePartial", payload),
+    }): Promise<CharacterResult> => ipcRenderer.invoke("characters:regeneratePartial", payload),
     appendGatheringMessages: (
       id: string,
       messages: UIMessage[]
@@ -273,19 +238,13 @@ const api = {
       id: string,
       field: "title" | "publicDescription" | "scenario" | "privateDetails",
       value: string
-    ): Promise<
-      | { success: true; stored: StoredGroupChat }
-      | { success: false; error: string }
-    > =>
+    ): Promise<GroupChatResult> =>
       ipcRenderer.invoke("group-chats:updateField", { id, field, value }),
     updateGreetingMessage: (
       id: string,
       index: number,
       message: string
-    ): Promise<
-      | { success: true; stored: StoredGroupChat }
-      | { success: false; error: string }
-    > =>
+    ): Promise<GroupChatResult> =>
       ipcRenderer.invoke("group-chats:updateGreetingMessage", {
         id,
         index,
@@ -294,10 +253,7 @@ const api = {
     generateGreeting: (
       id: string,
       speakerFirstName: string
-    ): Promise<
-      | { success: true; stored: StoredGroupChat }
-      | { success: false; error: string }
-    > =>
+    ): Promise<GroupChatResult> =>
       ipcRenderer.invoke("group-chats:generateGreeting", {
         id,
         speakerFirstName,
@@ -305,10 +261,7 @@ const api = {
     deleteGreeting: (
       id: string,
       index: number
-    ): Promise<
-      | { success: true; stored: StoredGroupChat }
-      | { success: false; error: string }
-    > => ipcRenderer.invoke("group-chats:deleteGreeting", { id, index }),
+    ): Promise<GroupChatResult> => ipcRenderer.invoke("group-chats:deleteGreeting", { id, index }),
     updateGatheringMessages: (
       id: string,
       gatheringMessages: UIMessage[]
@@ -382,10 +335,7 @@ const api = {
       confirmedProfile?: ConfirmedProfile;
       draftId?: string;
       sourceCharacterId?: string;
-    }): Promise<
-      | { success: true; stored: StoredCharacter }
-      | { success: false; error: string }
-    > => ipcRenderer.invoke("generate:character:finalize", payload),
+    }): Promise<CharacterResult> => ipcRenderer.invoke("generate:character:finalize", payload),
     inferMeasurements: (payload: {
       gatheringSummary: string;
     }): Promise<
