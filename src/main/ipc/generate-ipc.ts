@@ -1,5 +1,4 @@
-import { ipcMain } from "electron";
-import { nanoid } from "nanoid";
+import type { UIMessage } from "@shared/chat";
 import type {
 	GenerateCharacterAllResponse,
 	GenerateCharacterStepResponse,
@@ -7,7 +6,6 @@ import type {
 	GenerateScenesResponse,
 	GenerateSingleSceneResponse,
 } from "@shared/generate";
-import type { UIMessage } from "@shared/chat";
 import type {
 	Character,
 	CharacterProfilePreview,
@@ -26,6 +24,8 @@ import {
 	DEFAULT_IMAGE_MODEL,
 	DEFAULT_MESSAGE_LENGTH,
 } from "@shared/schemas";
+import { ipcMain } from "electron";
+import { nanoid } from "nanoid";
 import {
 	generateCharacter,
 	generateCharacterStep,
@@ -34,10 +34,7 @@ import {
 } from "../agent/generate-character";
 import { generateGroupChat } from "../agent/generate-group-chat";
 import { generateScenes, generateSingleScene } from "../agent/generate-scenes";
-import {
-	listCharacters,
-	saveCharacter,
-} from "../storage/characters";
+import { listCharacters, saveCharacter } from "../storage/characters";
 import { saveGroupChat } from "../storage/group-chats";
 import { getSettings } from "../storage/settings";
 import { type IpcCtx, withConfirmedMeasurements } from "./helpers";
@@ -70,7 +67,8 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				difficulty: payload.difficulty,
 				messageLength,
 				imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
+				fastModel: settings.fastModel,
 				gatheringSummary: summaryWithMeasurements,
 				superAdmin: settings.superAdmin,
 				confirmedProfile: payload.confirmedProfile,
@@ -80,7 +78,8 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 			if (!result.success || !result.character) {
 				const partialByStep: Partial<Record<CharacterStepId, unknown>> = {};
 				for (const [id, res] of Object.entries(result.stepResults)) {
-					if (res && res.success) partialByStep[id as CharacterStepId] = res.data;
+					if (res && res.success)
+						partialByStep[id as CharacterStepId] = res.data;
 				}
 				return {
 					success: false,
@@ -90,7 +89,10 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 			}
 
 			const characterWithMeasurements: Character = payload.confirmedMeasurements
-				? { ...result.character, confirmedMeasurements: payload.confirmedMeasurements }
+				? {
+						...result.character,
+						confirmedMeasurements: payload.confirmedMeasurements,
+					}
 				: result.character;
 			const stored: StoredCharacter = {
 				id: payload.draftId ?? nanoid(),
@@ -110,7 +112,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				(acc, r) => {
 					if (!r || !r.usage) return acc;
 					return {
-						model: settings.generationModel,
+						model: settings.mainModel,
 						inputTokens: acc.inputTokens + r.usage.inputTokens,
 						outputTokens: acc.outputTokens + r.usage.outputTokens,
 						cacheReadTokens: acc.cacheReadTokens + r.usage.cacheReadTokens,
@@ -121,7 +123,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 					};
 				},
 				{
-					model: settings.generationModel,
+					model: settings.mainModel,
 					inputTokens: 0,
 					outputTokens: 0,
 					cacheReadTokens: 0,
@@ -157,7 +159,8 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				difficulty: payload.difficulty,
 				messageLength: payload.messageLength ?? DEFAULT_MESSAGE_LENGTH,
 				imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
-				generationModel: settings.generationModel,
+				generationModel:
+					payload.stepId === "visual" ? settings.fastModel : settings.mainModel,
 				gatheringSummary: withConfirmedMeasurements(
 					payload.gatheringSummary,
 					payload.confirmedMeasurements,
@@ -245,7 +248,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 			const settings = await getSettings();
 			return inferMeasurements({
 				gatheringSummary: payload.gatheringSummary,
-				generationModel: settings.generationModel,
+				generationModel: settings.fastModel,
 			});
 		},
 	);
@@ -263,7 +266,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 			return inferProfile({
 				gatheringSummary: payload.gatheringSummary,
 				difficulty: payload.difficulty,
-				generationModel: settings.generationModel,
+				generationModel: settings.fastModel,
 			});
 		},
 	);
@@ -287,7 +290,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				sceneCount: payload.sceneCount,
 				onEvent: emitProgress,
 			});
@@ -329,7 +332,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				imageModel: payload.imageModel ?? DEFAULT_IMAGE_MODEL,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				onEvent: emitProgress,
 			});
 			if (!result.success) {
@@ -382,7 +385,7 @@ export function registerGenerateIpc({ emitProgress }: IpcCtx): void {
 				gatheringSummary: payload.gatheringSummary,
 				messageLength: payload.messageLength,
 				superAdmin: settings.superAdmin,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				onEvent: emitProgress,
 			});
 			if (!result.success) {

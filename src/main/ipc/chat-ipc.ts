@@ -10,7 +10,7 @@ import {
 	startSession,
 	stopSession,
 	submitToolOutput,
-} from "../agent/session";
+} from "../llm/session";
 import { getSettings } from "../storage/settings";
 import type { IpcCtx } from "./helpers";
 
@@ -138,7 +138,7 @@ export function registerChatIpc({ window }: IpcCtx): void {
 				window,
 				payload.initialUserMessage,
 				undefined,
-				settings.generationModel,
+				settings.mainModel,
 				payload.sessionId,
 			);
 			return { success: true, sessionId };
@@ -180,7 +180,7 @@ export function registerChatIpc({ window }: IpcCtx): void {
 					window,
 					payload.newMessage,
 					payload.replayTranscript,
-					settings.generationModel,
+					settings.mainModel,
 					payload.sessionId,
 				);
 				return { success: true as const, sessionId };

@@ -1,11 +1,12 @@
-import type { BrowserWindow } from "electron";
 import type { GenerateProgressEvent } from "@shared/generate";
+import type { BrowserWindow } from "electron";
 import { registerCharactersIpc } from "./characters-ipc";
 import { registerChatIpc } from "./chat-ipc";
 import { registerDraftsIpc } from "./drafts-ipc";
 import { registerGenerateIpc } from "./generate-ipc";
 import { registerGroupChatsIpc } from "./group-chats-ipc";
 import type { IpcCtx } from "./helpers";
+import { registerImagesIpc } from "./images-ipc";
 import { registerSettingsIpc } from "./settings-ipc";
 import { registerSystemIpc } from "./system-ipc";
 
@@ -27,4 +28,5 @@ export function registerIpc(window: BrowserWindow): void {
 	registerSettingsIpc();
 	registerGenerateIpc(ctx);
 	registerChatIpc(ctx);
+	registerImagesIpc(ctx);
 }

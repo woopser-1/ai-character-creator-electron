@@ -436,7 +436,7 @@ const OUR_DREAM_FIELD_LABELS: Record<keyof OurDreamFields, string> = {
 	ethnicity: "Ethnicity",
 	skinColor: "Skin tone",
 	bodyType: "Body type",
-	breastSize: "Breast size",
+	breastSize: "Chest / breast",
 	buttSize: "Butt size",
 	hairColor: "Hair color",
 	hairStyle: "Hair style",
@@ -503,7 +503,7 @@ function TagsRow({ tags }: { tags: readonly string[] }) {
 function MeasurementsGrid({ measurements }: { measurements: Measurements }) {
 	const items: { label: string; value: string }[] = [
 		{ label: "Height", value: `${measurements.heightCm} cm` },
-		{ label: "Bust", value: `${measurements.bustCm} cm` },
+		{ label: "Chest/Bust", value: `${measurements.bustCm} cm` },
 		{ label: "Cup", value: measurements.cupSize },
 		{ label: "Waist", value: `${measurements.waistCm} cm` },
 		{ label: "Hips", value: `${measurements.hipsCm} cm` },
@@ -598,6 +598,12 @@ export function CharacterIdentity({ data }: CharacterIdentityProps) {
 			</div>
 
 			<dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-foreground/10 border-t pt-4">
+				{character.gender && (
+					<DefItem
+						label="Gender"
+						value={character.gender === "male" ? "Male" : "Female"}
+					/>
+				)}
 				<DefItem label="Personality" value={character.personalityLabel} />
 				<DefItem label="Occupation" value={character.occupationLabel} />
 				<DefItem label="Relationship" value={character.relationshipLabel} />

@@ -8,7 +8,6 @@ import {
 	ImagePlus,
 	Link as LinkIcon,
 	Loader2,
-	MessageCircle,
 	MoreHorizontal,
 	RefreshCw,
 	Search,
@@ -22,6 +21,7 @@ import {
 	CharacterIdentity,
 	CharacterReview,
 } from "@/components/character-detail";
+import { ConversationTargetDetailLayout } from "@/components/conversation-target-detail-layout";
 import { OurDreamUrlDialog } from "@/components/ourdream-url-dialog";
 import { QuickEditDialog } from "@/components/quick-edit-dialog";
 import { RefineSceneDialog } from "@/components/refine-scene-dialog";
@@ -53,6 +53,7 @@ function synthGatheringSummary(data: StoredCharacter): string {
 	const c = data.character;
 	const lines = [
 		`Character: ${c.firstName} ${c.lastName}.`,
+		`Gender: ${c.gender ?? "unspecified"}.`,
 		`Difficulty: ${data.difficulty}.`,
 		`Personality: ${c.personalityLabel}.`,
 		`Occupation: ${c.occupationLabel}.`,
@@ -76,7 +77,7 @@ function synthGatheringSummary(data: StoredCharacter): string {
 			`- hairStyle: ${odf.hairStyle}`,
 			`- eyeColor: ${odf.eyeColor}`,
 			`- bodyType: ${odf.bodyType}`,
-			`- breastSize: ${odf.breastSize}`,
+			`- chestOrBreastSize: ${odf.breastSize}`,
 			`- buttSize: ${odf.buttSize}`,
 		);
 	}
@@ -362,29 +363,25 @@ export function CharacterDetailPage({ id }: { id: string }) {
 	);
 
 	return (
-		<div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6 lg:px-8 lg:pt-10">
-			<TopUtilityBar data={data} />
+		<>
+			<ConversationTargetDetailLayout
+				backBar={<TopUtilityBar data={data} />}
+				identity={<CharacterIdentity data={data} />}
+			>
+				{moodAxesError && (
+					<div className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs ring-1 ring-destructive/30">
+						Mood axes generation failed: {moodAxesError}
+					</div>
+				)}
 
-			{moodAxesError && (
-				<div className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs ring-1 ring-destructive/30">
-					Mood axes generation failed: {moodAxesError}
-				</div>
-			)}
-
-			<div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-10 lg:grid-cols-[20rem_1fr] xl:grid-cols-[22rem_1fr] xl:gap-x-14">
-				<aside>
-					<CharacterIdentity data={data} />
-				</aside>
-				<main className="min-w-0">
-					<CharacterReview
-						actions={actions}
-						data={data}
-						onCharacterUpdated={setData}
-						onRefineScene={(idx) => setRefineSceneIndex(idx)}
-						onRewindFromMessage={handleRewindFromMessage}
-					/>
-				</main>
-			</div>
+				<CharacterReview
+					actions={actions}
+					data={data}
+					onCharacterUpdated={setData}
+					onRefineScene={(idx) => setRefineSceneIndex(idx)}
+					onRewindFromMessage={handleRewindFromMessage}
+				/>
+			</ConversationTargetDetailLayout>
 
 			<AddSceneDialog
 				character={data}
@@ -553,7 +550,7 @@ export function CharacterDetailPage({ id }: { id: string }) {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-		</div>
+		</>
 	);
 }
 
@@ -572,7 +569,7 @@ function TopUtilityBar({ data }: { data: StoredCharacter }) {
 						<TooltipTrigger
 							render={
 								<a
-									aria-label="Open chat on OurDream"
+									aria-label="Open OurDream chat"
 									href={ourdreamChatUrl(data.ourdreamUrl)}
 									rel="noreferrer noopener"
 									target="_blank"
@@ -584,16 +581,16 @@ function TopUtilityBar({ data }: { data: StoredCharacter }) {
 								size="icon-sm"
 								variant="ghost"
 							>
-								<MessageCircle className="h-3.5 w-3.5" />
+								<ExternalLink className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
-						<TooltipContent>Open chat on OurDream</TooltipContent>
+						<TooltipContent>Open OurDream chat</TooltipContent>
 					</Tooltip>
 					<Tooltip>
 						<TooltipTrigger
 							render={
 								<a
-									aria-label="Open profile on OurDream"
+									aria-label="Open OurDream profile"
 									href={data.ourdreamUrl}
 									rel="noreferrer noopener"
 									target="_blank"
@@ -605,10 +602,10 @@ function TopUtilityBar({ data }: { data: StoredCharacter }) {
 								size="icon-sm"
 								variant="ghost"
 							>
-								<ExternalLink className="h-3.5 w-3.5" />
+								<LinkIcon className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
-						<TooltipContent>Open profile on OurDream</TooltipContent>
+						<TooltipContent>Open OurDream profile</TooltipContent>
 					</Tooltip>
 				</div>
 			)}

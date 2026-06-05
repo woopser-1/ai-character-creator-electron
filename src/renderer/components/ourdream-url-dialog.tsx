@@ -1,8 +1,8 @@
 import { ourdreamChatUrl } from "@shared/ourdream-urls";
 import {
 	ExternalLink,
+	Link as LinkIcon,
 	Loader2,
-	MessageCircle,
 	RefreshCw,
 	Trash2,
 } from "lucide-react";
@@ -145,8 +145,8 @@ export function OurDreamUrlDialog({
 											rel="noreferrer noopener"
 											target="_blank"
 										>
-											<MessageCircle className="h-3 w-3" />
-											Open chat
+											<ExternalLink className="h-3 w-3" />
+											OurDream chat
 										</a>
 										<a
 											className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-foreground/55 transition-colors duration-150 ease-out hover:bg-secondary hover:text-foreground"
@@ -154,7 +154,7 @@ export function OurDreamUrlDialog({
 											rel="noreferrer noopener"
 											target="_blank"
 										>
-											<ExternalLink className="h-3 w-3" />
+											<LinkIcon className="h-3 w-3" />
 											Profile
 										</a>
 									</div>

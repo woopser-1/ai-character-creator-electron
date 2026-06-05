@@ -1,4 +1,8 @@
-import { z } from "zod";
+import type {
+	GenerateProgressEvent,
+	StepResult,
+	StepUsage,
+} from "@shared/generate";
 import {
 	applySuperAdminOverride,
 	buildGroupChatGenerationPrompt,
@@ -8,33 +12,27 @@ import {
 } from "@shared/prompts";
 import {
 	type Character,
-	DEFAULT_GENERATION_MODEL,
+	DEFAULT_MAIN_MODEL,
 	DEFAULT_MESSAGE_LENGTH,
-	type GenerationModel,
 	type GroupChat,
 	type GroupChatGreeting,
 	groupChatSchema,
 	type MessageLength,
 	singleGroupChatGreetingOutputSchema,
 } from "@shared/schemas";
-import type {
-	GenerateProgressEvent,
-	StepResult,
-	StepUsage,
-} from "@shared/generate";
+import { z } from "zod";
 import {
-	ClaudeAuthError,
-	type ClaudeModel,
-	type ClaudeRunResult,
-	runClaude,
-} from "../claude/runner";
+	MissingApiKeyError,
+	type ModelRunResult,
+	runModel,
+} from "../llm/runner";
 
 const REFUSAL_PATTERN =
 	/\b(I (can('?| no)t|am unable|won'?t)|I (must|have to) (decline|refuse)|I'm not (able|going to|comfortable)|content (policy|guidelines)|inappropriate|out[- ]of[- ]character|doesn'?t (fit|match|align) (with )?(the|this) (character|personality)|inconsistent with|not (consistent|aligned) with|hors[- ]caract|ne (correspond|colle) pas (au|à)|incoh[ée]rent|d[ée]sol[ée], je)/i;
 
 function extractUsage(
-	model: ClaudeModel,
-	result: ClaudeRunResult,
+	model: string,
+	result: ModelRunResult,
 	startedAt: number,
 ): StepUsage | undefined {
 	const raw = result.rawResultEvent;
@@ -62,7 +60,7 @@ export interface GenerateGroupChatInput {
 	characters: Character[];
 	gatheringSummary: string;
 	messageLength?: MessageLength;
-	generationModel?: GenerationModel;
+	generationModel?: string;
 	superAdmin: boolean;
 	onEvent?: (event: GenerateProgressEvent) => void;
 }
@@ -72,10 +70,14 @@ export async function generateGroupChat(
 ): Promise<StepResult<GroupChat>> {
 	const { runId, characters, gatheringSummary, superAdmin, onEvent } = input;
 	const messageLength = input.messageLength ?? DEFAULT_MESSAGE_LENGTH;
-	const generationModel: ClaudeModel =
-		input.generationModel ?? DEFAULT_GENERATION_MODEL;
+	const generationModel: string = input.generationModel ?? DEFAULT_MAIN_MODEL;
 
-	onEvent?.({ runId, kind: "group-chat", step: "group-chat", status: "started" });
+	onEvent?.({
+		runId,
+		kind: "group-chat",
+		step: "group-chat",
+		status: "started",
+	});
 
 	const baseSystem = buildGroupChatGenerationPrompt(messageLength);
 	const systemPrompt = applySuperAdminOverride(baseSystem, superAdmin);
@@ -87,9 +89,9 @@ export async function generateGroupChat(
 	const jsonSchema = z.toJSONSchema(groupChatSchema);
 	const startedAt = Date.now();
 
-	let result: ClaudeRunResult;
+	let result: ModelRunResult;
 	try {
-		result = await runClaude({
+		result = await runModel({
 			model: generationModel,
 			systemPrompt,
 			userMessage,
@@ -97,10 +99,10 @@ export async function generateGroupChat(
 			stepLabel: "group-chat",
 		});
 	} catch (err) {
-		const isAuth = err instanceof ClaudeAuthError;
+		const isAuth = err instanceof MissingApiKeyError;
 		const prefix = isAuth
 			? `[group-chat] AUTH: `
-			: `[group-chat] runClaude threw: `;
+			: `[group-chat] runModel threw: `;
 		console.error("[generate-group-chat:exception]", {
 			isAuth,
 			message: err instanceof Error ? err.message : String(err),
@@ -193,7 +195,7 @@ export interface GenerateSingleGroupChatGreetingInput {
 	privateDetails: string;
 	existingGreetings: GroupChatGreeting[];
 	messageLength?: MessageLength;
-	generationModel?: GenerationModel;
+	generationModel?: string;
 	superAdmin: boolean;
 	onEvent?: (event: GenerateProgressEvent) => void;
 }
@@ -212,8 +214,7 @@ export async function generateSingleGroupChatGreeting(
 		onEvent,
 	} = input;
 	const messageLength = input.messageLength ?? DEFAULT_MESSAGE_LENGTH;
-	const generationModel: ClaudeModel =
-		input.generationModel ?? DEFAULT_GENERATION_MODEL;
+	const generationModel: string = input.generationModel ?? DEFAULT_MAIN_MODEL;
 
 	onEvent?.({
 		runId,
@@ -235,9 +236,9 @@ export async function generateSingleGroupChatGreeting(
 	const jsonSchema = z.toJSONSchema(singleGroupChatGreetingOutputSchema);
 	const startedAt = Date.now();
 
-	let result: ClaudeRunResult;
+	let result: ModelRunResult;
 	try {
-		result = await runClaude({
+		result = await runModel({
 			model: generationModel,
 			systemPrompt,
 			userMessage,
@@ -245,10 +246,10 @@ export async function generateSingleGroupChatGreeting(
 			stepLabel: "group-chat",
 		});
 	} catch (err) {
-		const isAuth = err instanceof ClaudeAuthError;
+		const isAuth = err instanceof MissingApiKeyError;
 		const prefix = isAuth
 			? `[group-chat-greeting] AUTH: `
-			: `[group-chat-greeting] runClaude threw: `;
+			: `[group-chat-greeting] runModel threw: `;
 		onEvent?.({
 			runId,
 			kind: "group-chat",

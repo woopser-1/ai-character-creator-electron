@@ -350,7 +350,7 @@ export function registerGroupChatsIpc({ window, emitProgress }: IpcCtx): void {
 				existingGreetings: existing.groupChat.greetingMessages ?? [],
 				messageLength: existing.messageLength,
 				superAdmin: settings.superAdmin,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				onEvent: emitProgress,
 			});
 			if (!result.success) {
@@ -442,7 +442,7 @@ export function registerGroupChatsIpc({ window, emitProgress }: IpcCtx): void {
 				gatheringSummary: existing.gatheringSummary ?? "",
 				messageLength: existing.messageLength,
 				superAdmin: settings.superAdmin,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				onEvent: emitProgress,
 			});
 			if (!result.success) {

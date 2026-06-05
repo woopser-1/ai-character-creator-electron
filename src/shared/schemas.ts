@@ -34,6 +34,9 @@ export const IMAGE_MODELS = ["Dreamy", "Vivid", "Vivid 2", "Vivid 3"] as const;
 export type ImageModel = (typeof IMAGE_MODELS)[number];
 export const DEFAULT_IMAGE_MODEL: ImageModel = "Vivid";
 
+export const CHARACTER_GENDERS = ["female", "male"] as const;
+export type CharacterGender = (typeof CHARACTER_GENDERS)[number];
+
 export const MOOD_AXIS_DELTA_RANGES: Record<
 	Difficulty,
 	{ positive: string; negative: string; summary: string }
@@ -103,6 +106,28 @@ export const POST_INTIMACY_BEHAVIORS = [
 	"conflicted",
 ] as const;
 export type PostIntimacyBehavior = (typeof POST_INTIMACY_BEHAVIORS)[number];
+
+export const TRACKED_MOOD_AXIS_LABELS = [
+	"Composure",
+	"Openness",
+	"Trust",
+	"Warmth",
+	"Confidence",
+	"Playfulness",
+	"Curiosity",
+	"Vulnerability",
+	"Guardedness",
+	"Attraction",
+	"Affection",
+	"Independence",
+	"Dominance",
+	"Patience",
+	"Honesty",
+	"Jealousy",
+	"Anxiety",
+	"Desire",
+] as const;
+export type TrackedMoodAxisLabel = (typeof TRACKED_MOOD_AXIS_LABELS)[number];
 
 function flattenScoreReasoningPairs(input: unknown): unknown {
 	if (!input || typeof input !== "object" || Array.isArray(input)) return input;
@@ -258,6 +283,18 @@ export const moodAxisSchema = z.object({
 
 export type MoodAxis = z.infer<typeof moodAxisSchema>;
 
+export const generatedVisibleMoodAxisSchema = moodAxisSchema.extend({
+	label: z
+		.enum(TRACKED_MOOD_AXIS_LABELS)
+		.describe(
+			"Canonical visible mood/personality trait label. Must be one of the predefined generic tracked labels; never invent a context-specific label.",
+		),
+});
+
+export type GeneratedVisibleMoodAxis = z.infer<
+	typeof generatedVisibleMoodAxisSchema
+>;
+
 // MoodAxes uses a fixed visible primary + secondary (which appear in the
 // metadata header) plus an OPTIONAL `hidden` array of 1-3 additional axes that
 // evolve silently in the background and condition behavior without surfacing in
@@ -281,6 +318,22 @@ export const moodAxesSchema = z.object({
 
 export type MoodAxes = z.infer<typeof moodAxesSchema>;
 
+export const generatedMoodAxesSchema = moodAxesSchema
+	.extend({
+		primary: generatedVisibleMoodAxisSchema.describe(
+			"The first visible axis. Its label MUST be chosen from the predefined tracked label enum.",
+		),
+		secondary: generatedVisibleMoodAxisSchema.describe(
+			"The second visible axis. Its label MUST be chosen from the predefined tracked label enum and must not duplicate primary.label.",
+		),
+	})
+	.refine((axes) => axes.primary.label !== axes.secondary.label, {
+		message: "primary.label and secondary.label must be different",
+		path: ["secondary", "label"],
+	});
+
+export type GeneratedMoodAxes = z.infer<typeof generatedMoodAxesSchema>;
+
 // Helper — flat list of all axes (visible + hidden).
 export function getAllMoodAxes(m: MoodAxes): MoodAxis[] {
 	return [m.primary, m.secondary, ...(m.hidden ?? [])];
@@ -298,12 +351,16 @@ export const measurementsSchema = z.object({
 		.int()
 		.min(60)
 		.max(140)
-		.describe("Bust circumference in centimeters"),
+		.describe(
+			"Chest/bust circumference in centimeters. For male characters, this is chest circumference.",
+		),
 	cupSize: z
 		.string()
 		.min(1)
 		.max(6)
-		.describe("Bra cup size, e.g. 'A', 'B', 'C', 'D', 'DD', 'DDD+'"),
+		.describe(
+			"Bra cup size for female characters, e.g. 'A', 'B', 'C', 'D', 'DD', 'DDD+'. Use 'N/A' for male characters.",
+		),
 	waistCm: z
 		.number()
 		.int()
@@ -332,7 +389,7 @@ export const ourDreamFieldsSchema = z.object({
 		.string()
 		.min(1)
 		.describe(
-			"Hair style as prose or parenthesised tags. Gold-standard examples: '(long_wavy_hair), (voluminous_hair), (loose_waves_hair)' or in natural prose 'long wavy voluminous hair worn loose past her shoulders'. Must match the hair style described in customPhysicalDetails and baseGenerationPrompt.",
+			"Hair style as prose or parenthesised tags. Gold-standard examples: '(long_wavy_hair), (voluminous_hair), (loose_waves_hair)' or in natural prose 'long wavy voluminous hair worn loose past the shoulders'. Must match the hair style described in customPhysicalDetails and baseGenerationPrompt.",
 		),
 	hairColor: z
 		.string()
@@ -362,7 +419,7 @@ export const ourDreamFieldsSchema = z.object({
 		.string()
 		.min(1)
 		.describe(
-			"Breast shape + size as prose, e.g. 'medium firm perky natural breasts, youthful lift'. Must be proportional to bodyType.",
+			"Chest/breast shape + size as prose. For female characters, describe breasts, e.g. 'medium firm perky natural breasts, youthful lift'. For male characters, describe the masculine chest/pectorals, e.g. 'broad masculine chest with defined pectorals'. Must be proportional to bodyType.",
 		),
 	buttSize: z
 		.string()
@@ -404,7 +461,7 @@ export const characterProfilePreviewSchema = z.object({
 	measurements: measurementsSchema,
 	difficultyProfile: difficultyProfileSchema,
 	intimacyProfile: intimacyProfileSchema,
-	moodAxes: moodAxesSchema,
+	moodAxes: generatedMoodAxesSchema,
 });
 
 export type CharacterProfilePreview = z.infer<
@@ -494,10 +551,16 @@ export const characterSchema = z.object({
 		.describe(
 			"The character's age in years (integer 18-99). Optional for backwards compatibility with characters created before this field existed — but required for all new generations (enforced in characterVisualSchema). Must match the age woven into baseGenerationPrompt and any image prompts.",
 		),
+	gender: z
+		.enum(CHARACTER_GENDERS)
+		.optional()
+		.describe(
+			"The character's gender presentation. Optional for backwards compatibility; required for new generated characters.",
+		),
 	baseGenerationPrompt: z
 		.string()
 		.describe(
-			"Detailed generation prompt with exhaustive body and face details: ethnicity, body type/build, breast size/shape, bust size, butt shape/size, waist/hip proportions, height, skin tone, hair colour/length/style, eye colour, facial structure, and personality essence. Written as a natural flowing description.",
+			"Detailed generation prompt with exhaustive body and face details: ethnicity, body type/build, chest/breast shape, chest/bust size, butt shape/size, waist/hip proportions, height, skin tone, hair colour/length/style, eye colour, facial structure, and personality essence. Written as a natural flowing description.",
 		),
 	customPhysicalDetails: z
 		.string()
@@ -561,7 +624,7 @@ export const characterSchema = z.object({
 	ourDreamFields: ourDreamFieldsSchema
 		.optional()
 		.describe(
-			"Atomic OurDream form fields (hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor) — prose-rich values that mirror customPhysicalDetails/customFaceDetails. Optional for backwards compatibility with characters created before this field existed.",
+			"Atomic OurDream form fields (hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor) — prose-rich values that mirror customPhysicalDetails/customFaceDetails. The legacy breastSize key stores chest/breast prose depending on gender. Optional for backwards compatibility with characters created before this field existed.",
 		),
 });
 
@@ -604,16 +667,36 @@ export const characterCoreSchema = characterSchema.omit({
 
 export type CharacterCore = z.infer<typeof characterCoreSchema>;
 
-export const scenarioOnlySchema = characterSchema.pick({ scenario: true });
+export const scenarioOnlySchema = z.object({
+	scenario: z
+		.string()
+		.min(1500)
+		.max(9000)
+		.describe(
+			"Complete scenario field with narrative setup, romance/intimacy pacing, hidden trust system, scene progression, wardrobe state, and format rules.",
+		),
+});
 export type ScenarioOnly = z.infer<typeof scenarioOnlySchema>;
 
-export const personalityOnlySchema = characterSchema.pick({
-	additionalPersonalityDetails: true,
+export const personalityOnlySchema = z.object({
+	additionalPersonalityDetails: z
+		.string()
+		.min(6000)
+		.max(22000)
+		.describe(
+			"Complete XML-tagged behavioral personality spec. Must include all required personality sections in order.",
+		),
 });
 export type PersonalityOnly = z.infer<typeof personalityOnlySchema>;
 
-export const extraDetailsOnlySchema = characterSchema.pick({
-	extraDetails: true,
+export const extraDetailsOnlySchema = z.object({
+	extraDetails: z
+		.string()
+		.min(1000)
+		.max(9000)
+		.describe(
+			"Complete XML-tagged lore and memory spec including Setting, Backstory, Relationship_And_Intimacy_History, Key_NPCs, NPC_Voice_Guidance, and Core_Behavior_And_Memory.",
+		),
 });
 export type ExtraDetailsOnly = z.infer<typeof extraDetailsOnlySchema>;
 
@@ -639,6 +722,7 @@ export const characterLightSchema = characterSchema
 	.pick({
 		firstName: true,
 		lastName: true,
+		gender: true,
 		publicDescription: true,
 		greetingMessage: true,
 		firstReplySuggestion: true,
@@ -651,8 +735,17 @@ export const characterLightSchema = characterSchema
 		intimacyProfile: true,
 	})
 	.extend({
-		moodAxes: moodAxesSchema.describe(
-			"Two fixed mood axes tracked on 0-100 during conversation — generated fresh each light run.",
+		publicDescription: z.string().min(120).max(600),
+		gender: z.enum(CHARACTER_GENDERS),
+		greetingMessage: z.string().min(80).max(2500),
+		firstReplySuggestion: z.string().min(1).max(100),
+		personalityLabel: z.string().min(2).max(60),
+		occupationLabel: z.string().min(2).max(60),
+		relationshipLabel: z.string().min(2).max(60),
+		hobbyLabel: z.string().min(2).max(60),
+		fetishLabel: z.string().min(2).max(60),
+		moodAxes: generatedMoodAxesSchema.describe(
+			"Two fixed visible mood axes tracked on 0-100 during conversation. Visible labels must come from the predefined tracked label enum.",
 		),
 	});
 export type CharacterLight = z.infer<typeof characterLightSchema>;
@@ -737,25 +830,46 @@ export const CHARACTER_STEP_IDS = [
 ] as const;
 export type CharacterStepId = (typeof CHARACTER_STEP_IDS)[number];
 
-export const GENERATION_MODELS = ["opus", "sonnet"] as const;
-export type GenerationModel = (typeof GENERATION_MODELS)[number];
-export const DEFAULT_GENERATION_MODEL: GenerationModel = "opus";
+export interface ModelPreset {
+	id: string;
+	label: string;
+	description: string;
+}
 
-export const GENERATION_MODEL_META: Record<
-	GenerationModel,
-	{ label: string; description: string }
-> = {
-	opus: {
-		label: "Claude Opus",
+export const OPENROUTER_MODEL_PRESETS: readonly ModelPreset[] = [
+	{
+		id: "deepseek/deepseek-v4-flash",
+		label: "DeepSeek V4 Flash",
 		description:
-			"Highest quality and most nuanced output. Slower and more expensive — the default for character work.",
+			"Fast and very cheap with a 1M-token context. Recommended default for character work.",
 	},
-	sonnet: {
-		label: "Claude Sonnet",
+	{
+		id: "deepseek/deepseek-v4-pro",
+		label: "DeepSeek V4 Pro",
 		description:
-			"Faster and cheaper than Opus with strong quality. A good pick when iterating quickly.",
+			"Highest-quality DeepSeek with a 1M-token context. Slower and more expensive — use as the main model when quality matters most.",
 	},
-};
+	{
+		id: "deepseek/deepseek-v3.2",
+		label: "DeepSeek V3.2",
+		description: "Strong quality with a 131K-token context.",
+	},
+	{
+		id: "deepseek/deepseek-chat-v3.1",
+		label: "DeepSeek V3.1",
+		description: "Previous-generation chat model with a 164K-token context.",
+	},
+];
+
+export const DEFAULT_MAIN_MODEL = "deepseek/deepseek-v4-flash";
+export const DEFAULT_FAST_MODEL = "deepseek/deepseek-v4-flash";
+
+export interface ModelTiers {
+	/** Heavy steps: light/scenario/personality/extras, scenes, group chats. */
+	main: string;
+	/** Light steps: visual, measurements, profile inference. */
+	fast: string;
+}
 
 export const groupChatGreetingSchema = z.object({
 	speakerFirstName: z
@@ -840,17 +954,29 @@ export const MAX_GROUP_CHAT_CHARACTERS = 6;
 
 export const appSettingsSchema = z.object({
 	superAdmin: z.boolean().default(false),
-	generationModel: z.enum(GENERATION_MODELS).default(DEFAULT_GENERATION_MODEL),
+	/** OpenRouter model used for heavy generation steps and interactive gathering. */
+	mainModel: z.string().min(1).default(DEFAULT_MAIN_MODEL),
+	/** OpenRouter model used for light steps (visual, measurements, profile inference). */
+	fastModel: z.string().min(1).default(DEFAULT_FAST_MODEL),
 	/** Last difficulty the user picked in a /create session; reused as the default next time. */
 	lastDifficulty: z.enum(DIFFICULTIES).optional(),
 	/** Last reply-length preference the user picked; reused as the default next time. */
 	lastMessageLength: z.enum(MESSAGE_LENGTHS).optional(),
 	/** Last image model the user picked; reused as the default next time. */
 	lastImageModel: z.enum(IMAGE_MODELS).optional(),
+	/** ISO timestamp of the last successful profile-image refresh pass. */
+	lastImageRefreshAt: z.string().optional(),
 });
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
 	superAdmin: false,
-	generationModel: DEFAULT_GENERATION_MODEL,
+	mainModel: DEFAULT_MAIN_MODEL,
+	fastModel: DEFAULT_FAST_MODEL,
 };
+
+export function resolveModelTiers(
+	settings: Pick<AppSettings, "mainModel" | "fastModel">,
+): ModelTiers {
+	return { main: settings.mainModel, fast: settings.fastModel };
+}
