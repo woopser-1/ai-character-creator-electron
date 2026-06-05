@@ -399,7 +399,7 @@ export function ProfileReview({
 				<>
 					<Section
 						title="Body measurements"
-						summary={`${m.heightCm} cm · cup ${m.cupSize} · ${m.bustCm}-${m.waistCm}-${m.hipsCm}`}
+						summary={`${m.heightCm} cm · chest/bust ${m.bustCm} · cup ${m.cupSize}`}
 						open={openSections.has("body")}
 						onToggle={() => toggleSection("body")}
 					>
@@ -413,7 +413,7 @@ export function ProfileReview({
 								disabled={loading}
 							/>
 							<NumberField
-								label="Bust"
+								label="Chest/Bust"
 								value={m.bustCm}
 								min={60}
 								max={140}

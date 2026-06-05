@@ -197,8 +197,9 @@ function StepErrorBlock({
 	const [copied, setCopied] = useState(false);
 	const isAuth =
 		error.includes("AUTH:") ||
-		error.includes("ClaudeAuthError") ||
-		error.includes("not authenticated");
+		error.includes("MissingApiKeyError") ||
+		error.includes("No OpenRouter API key") ||
+		error.includes("No auth credentials");
 	const firstLine = error.split("\n")[0].slice(0, 200);
 
 	const handleCopy = () => {
@@ -218,15 +219,14 @@ function StepErrorBlock({
 			<div className="mt-1 animate-in fade-in rounded-md bg-destructive/10 px-2.5 py-1.5 text-destructive text-xs ring-1 ring-destructive/30 duration-200">
 				<div className="flex flex-wrap items-center gap-1.5">
 					<KeyRound className="h-3 w-3 shrink-0" />
-					<span className="font-medium">Claude Code is not authenticated.</span>
-					<code className="rounded bg-destructive/15 px-1 py-0.5 font-mono text-[11px]">
-						claude login
-					</code>
+					<span className="font-medium">
+						OpenRouter API key missing or invalid.
+					</span>
 					<a
 						className="ml-auto underline hover:text-foreground"
 						href="#/settings"
 					>
-						How to fix
+						Open settings
 					</a>
 				</div>
 				<button

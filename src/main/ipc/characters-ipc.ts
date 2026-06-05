@@ -1,7 +1,5 @@
 import { promises as fs } from "node:fs";
 import { basename } from "node:path";
-import { dialog, ipcMain } from "electron";
-import { nanoid } from "nanoid";
 import {
 	anyCharacterPortFileSchema,
 	CHARACTER_BUNDLE_KIND,
@@ -11,10 +9,7 @@ import {
 	type PortableCharacter,
 } from "@shared/character-port";
 import type { UIMessage } from "@shared/chat";
-import type {
-	ExportResponse,
-	ImportFileOutcome,
-} from "@shared/port-shared";
+import type { ExportResponse, ImportFileOutcome } from "@shared/port-shared";
 import type { CharacterResult } from "@shared/result";
 import type {
 	Character,
@@ -38,6 +33,8 @@ import {
 	personalityOnlySchema,
 	scenarioOnlySchema,
 } from "@shared/schemas";
+import { dialog, ipcMain } from "electron";
+import { nanoid } from "nanoid";
 import {
 	generateCharacterStep,
 	refreshVivid3Physical,
@@ -140,10 +137,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 
 	ipcMain.handle(
 		"characters:export",
-		async (
-			_event,
-			payload: { ids: string[] },
-		): Promise<ExportResponse> => {
+		async (_event, payload: { ids: string[] }): Promise<ExportResponse> => {
 			if (!payload.ids || payload.ids.length === 0) {
 				return { success: false, error: "No characters selected for export" };
 			}
@@ -215,32 +209,26 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 		},
 	);
 
-	ipcMain.handle(
-		"characters:import",
-		async (): Promise<ImportResponse> => {
-			const result = await dialog.showOpenDialog(window, {
-				title: "Import characters",
-				properties: ["openFile", "multiSelections"],
-				filters: [
-					{ name: "Character JSON", extensions: ["json"] },
-					{ name: "All files", extensions: ["*"] },
-				],
-			});
+	ipcMain.handle("characters:import", async (): Promise<ImportResponse> => {
+		const result = await dialog.showOpenDialog(window, {
+			title: "Import characters",
+			properties: ["openFile", "multiSelections"],
+			filters: [
+				{ name: "Character JSON", extensions: ["json"] },
+				{ name: "All files", extensions: ["*"] },
+			],
+		});
 
-			if (result.canceled || result.filePaths.length === 0) {
-				return { success: false, canceled: true };
-			}
+		if (result.canceled || result.filePaths.length === 0) {
+			return { success: false, canceled: true };
+		}
 
-			return runImport(result.filePaths);
-		},
-	);
+		return runImport(result.filePaths);
+	});
 
 	ipcMain.handle(
 		"characters:importFromPaths",
-		async (
-			_event,
-			payload: { paths: string[] },
-		): Promise<ImportResponse> => {
+		async (_event, payload: { paths: string[] }): Promise<ImportResponse> => {
 			if (!payload.paths || payload.paths.length === 0) {
 				return { success: false, error: "No files supplied" };
 			}
@@ -319,10 +307,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 
 	ipcMain.handle(
 		"characters:refreshProfileImage",
-		async (
-			_event,
-			payload: { id: string },
-		): Promise<CharacterResult> => {
+		async (_event, payload: { id: string }): Promise<CharacterResult> => {
 			const existing = await getCharacter(payload.id);
 			if (!existing) {
 				return { success: false, error: `Character ${payload.id} not found` };
@@ -333,9 +318,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 					error: "No OurDream URL saved for this character",
 				};
 			}
-			const extracted = await extractOurDreamProfileImage(
-				existing.ourdreamUrl,
-			);
+			const extracted = await extractOurDreamProfileImage(existing.ourdreamUrl);
 			if (!extracted.success) {
 				return { success: false, error: extracted.error };
 			}
@@ -371,6 +354,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				"additionalPersonalityDetails",
 				"extraDetails",
 				"publicDescription",
+				"gender",
 				"personalityLabel",
 				"occupationLabel",
 				"relationshipLabel",
@@ -543,7 +527,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				stepId: "scenario",
 				difficulty: existing.difficulty,
 				messageLength: payload.messageLength,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -586,7 +570,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				stepId: "light",
 				difficulty: existing.difficulty,
 				messageLength: existing.messageLength ?? DEFAULT_MESSAGE_LENGTH,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -627,7 +611,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				character: existing.character,
 				difficulty: existing.difficulty,
 				messageLength: existing.messageLength ?? DEFAULT_MESSAGE_LENGTH,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -671,7 +655,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 			const result = await refreshVivid3Physical({
 				runId: nanoid(),
 				character: existing.character,
-				generationModel: settings.generationModel,
+				generationModel: settings.fastModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -718,7 +702,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				stepId: "light",
 				difficulty: payload.difficulty,
 				messageLength,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -742,7 +726,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				stepId: "scenario",
 				difficulty: payload.difficulty,
 				messageLength,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				gatheringSummary: payload.gatheringSummary,
 				superAdmin: settings.superAdmin,
 				onEvent: emitProgress,
@@ -800,7 +784,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				difficulty: existing.difficulty,
 				messageLength: existing.messageLength ?? DEFAULT_MESSAGE_LENGTH,
 				imageModel: targetModel,
-				generationModel: settings.generationModel,
+				generationModel: settings.fastModel,
 				gatheringSummary: withConfirmedMeasurements(
 					payload.gatheringSummary,
 					payload.confirmedMeasurements,
@@ -824,8 +808,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 			}
 			const updated = await updateCharacter(payload.id, {
 				imageModel: targetModel,
-				confirmedProfile:
-					payload.confirmedProfile ?? existing.confirmedProfile,
+				confirmedProfile: payload.confirmedProfile ?? existing.confirmedProfile,
 				character: {
 					...existing.character,
 					age: parsed.data.age,
@@ -865,6 +848,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 
 			const synthSummary = [
 				`Regenerating the scene set for ${existing.character.firstName} ${existing.character.lastName}.`,
+				`Gender: ${existing.character.gender ?? "unspecified"}.`,
 				`Difficulty: ${existing.difficulty}.`,
 				`Personality: ${existing.character.personalityLabel}.`,
 				`Occupation: ${existing.character.occupationLabel}.`,
@@ -880,7 +864,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				gatheringSummary: synthSummary,
 				superAdmin: settings.superAdmin,
 				imageModel: targetModel,
-				generationModel: settings.generationModel,
+				generationModel: settings.mainModel,
 				sceneCount,
 				onEvent: emitProgress,
 			});
@@ -941,7 +925,8 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 						difficulty: existing.difficulty,
 						messageLength,
 						imageModel: targetModel,
-						generationModel: settings.generationModel,
+						generationModel:
+							stepId === "visual" ? settings.fastModel : settings.mainModel,
 						gatheringSummary: summary,
 						superAdmin: settings.superAdmin,
 						confirmedProfile: payload.confirmedProfile,
@@ -1044,12 +1029,11 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				const sceneCount =
 					existing.scenes.length > 0 ? existing.scenes.length : 4;
 				const sceneConcepts = existing.scenes.length
-					? existing.scenes
-							.map((s, i) => `${i + 1}. ${s.sceneName}`)
-							.join("\n")
+					? existing.scenes.map((s, i) => `${i + 1}. ${s.sceneName}`).join("\n")
 					: "(no prior scenes — invent fresh concepts that fit the character)";
 				const synthSummary = [
 					`Regenerating the scene set for ${mergedCharacter.firstName} ${mergedCharacter.lastName}.`,
+					`Gender: ${mergedCharacter.gender ?? "unspecified"}.`,
 					`Difficulty: ${existing.difficulty}.`,
 					`Personality: ${mergedCharacter.personalityLabel}.`,
 					`Occupation: ${mergedCharacter.occupationLabel}.`,
@@ -1064,7 +1048,7 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 					gatheringSummary: synthSummary,
 					superAdmin: settings.superAdmin,
 					imageModel: targetModel,
-					generationModel: settings.generationModel,
+					generationModel: settings.mainModel,
 					sceneCount,
 					onEvent: emitProgress,
 				});

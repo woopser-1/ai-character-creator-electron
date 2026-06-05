@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from "motion/react";
-import { ClaudeStatusBanner } from "@/components/claude-status-banner";
+import { ApiKeyBanner } from "@/components/api-key-banner";
 import { FilesSheetProvider } from "@/components/files-sheet";
 import { GroupChatsFilesSheetProvider } from "@/components/group-chats-files-sheet";
 import { NavHeader } from "@/components/nav-header";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useImageRefreshNotifier } from "@/hooks/use-image-refresh-notifier";
 import { useUpdateNotifier } from "@/hooks/use-update-notifier";
 import { ChromeProvider, useChromeRefs } from "@/lib/chrome-context";
 import { useRoute } from "@/lib/router";
@@ -37,11 +38,12 @@ function AppShell() {
 	const route = useRoute();
 	const { setSubHeaderEl, setChatDockEl } = useChromeRefs();
 	useUpdateNotifier();
+	useImageRefreshNotifier();
 
 	return (
 		<div className="flex h-screen flex-col overflow-hidden">
 			<NavHeader />
-			<ClaudeStatusBanner />
+			<ApiKeyBanner />
 			<div className="shrink-0" ref={setSubHeaderEl} />
 			<AnimatePresence initial={false} mode="wait">
 				<motion.main

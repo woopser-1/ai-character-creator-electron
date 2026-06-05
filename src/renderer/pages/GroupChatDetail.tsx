@@ -4,7 +4,7 @@ import {
 	BookOpen,
 	FileText,
 	Loader2,
-	MessageCircle,
+	MessagesSquare,
 	Plus,
 	Shield,
 	Sparkles,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DefItem, Section } from "@/components/character-detail";
+import { ConversationTargetDetailLayout } from "@/components/conversation-target-detail-layout";
 import { Button } from "@/components/ui/button";
 import {
 	CollapsibleField,
@@ -202,7 +203,6 @@ export function GroupChatDetailPage({ id }: GroupChatDetailPageProps) {
 		}
 	}, [data, toast]);
 
-	// ⌘E exports the current group chat.
 	useEffect(() => {
 		const handler = (event: KeyboardEvent) => {
 			const cmdE =
@@ -334,16 +334,7 @@ export function GroupChatDetailPage({ id }: GroupChatDetailPageProps) {
 	);
 
 	return (
-		<div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6 lg:px-8 lg:pt-10">
-			<div className="flex items-center justify-between">
-				<a href="#/group-chats">
-					<Button className="text-muted-foreground" size="sm" variant="ghost">
-						<ArrowLeft className="h-4 w-4" />
-						Group Chats
-					</Button>
-				</a>
-			</div>
-
+		<>
 			<Dialog
 				onOpenChange={(o) => {
 					if (regenerateBusy) return;
@@ -396,92 +387,105 @@ export function GroupChatDetailPage({ id }: GroupChatDetailPageProps) {
 				</DialogContent>
 			</Dialog>
 
-			<div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-10 lg:grid-cols-[20rem_1fr] xl:grid-cols-[22rem_1fr] xl:gap-x-14">
-				<aside>
+			<ConversationTargetDetailLayout
+				backBar={
+					<div className="flex items-center justify-between">
+						<a href="#/group-chats">
+							<Button
+								className="text-muted-foreground"
+								size="sm"
+								variant="ghost"
+							>
+								<ArrowLeft className="h-4 w-4" />
+								Group Chats
+							</Button>
+						</a>
+					</div>
+				}
+				identity={
 					<GroupChatIdentity
 						data={data}
 						members={members}
 						messageLengthMeta={messageLengthMeta}
 						missingCount={missingCount}
 					/>
-				</aside>
-				<main className="min-w-0">
-					<div className="mb-6 flex justify-end">{actions}</div>
-					<div className="space-y-12">
-						<Section
-							icon={<FileText className="h-4 w-4" />}
-							index={1}
-							title="Public description"
-						>
-							<CollapsibleField
-								label=""
-								maxHeight={140}
-								onSave={(v) => handleFieldSave("publicDescription", v)}
-								value={data.groupChat.publicDescription}
-							/>
-						</Section>
+				}
+			>
+				<div className="mb-6 flex justify-end">{actions}</div>
+				<div className="space-y-12">
+					<Section
+						icon={<FileText className="h-4 w-4" />}
+						index={1}
+						title="Public description"
+					>
+						<CollapsibleField
+							label=""
+							maxHeight={140}
+							onSave={(v) => handleFieldSave("publicDescription", v)}
+							value={data.groupChat.publicDescription}
+						/>
+					</Section>
 
-						<Section
-							icon={<BookOpen className="h-4 w-4" />}
-							index={2}
-							subtitle="Narrative setup plus the [FORMAT RULES] block. Paste this into the system prompt of your downstream chat."
-							title="Scenario"
-						>
-							<CollapsibleField
-								label=""
-								maxHeight={220}
-								mono
-								onSave={(v) => handleFieldSave("scenario", v)}
-								value={data.groupChat.scenario}
-							/>
-						</Section>
+					<Section
+						icon={<BookOpen className="h-4 w-4" />}
+						index={2}
+						subtitle="Narrative setup plus the [FORMAT RULES] block. Paste this into the system prompt of your downstream chat."
+						title="Scenario"
+					>
+						<CollapsibleField
+							label=""
+							maxHeight={220}
+							mono
+							onSave={(v) => handleFieldSave("scenario", v)}
+							value={data.groupChat.scenario}
+						/>
+					</Section>
 
-						<Section
-							icon={<Shield className="h-4 w-4" />}
-							index={3}
-							subtitle="Director's-cut spec: per-character stance, alliance map, message header template, speaker rotation, pacing, user integration, hidden group trust system."
-							title="Private details"
-						>
-							<CollapsibleField
-								label=""
-								maxHeight={220}
-								mono
-								onSave={(v) => handleFieldSave("privateDetails", v)}
-								value={data.groupChat.privateDetails}
-							/>
-						</Section>
+					<Section
+						icon={<Shield className="h-4 w-4" />}
+						index={3}
+						subtitle="Director's-cut spec: per-character stance, alliance map, message header template, speaker rotation, pacing, user integration, hidden group trust system."
+						title="Private details"
+					>
+						<CollapsibleField
+							label=""
+							maxHeight={220}
+							mono
+							onSave={(v) => handleFieldSave("privateDetails", v)}
+							value={data.groupChat.privateDetails}
+						/>
+					</Section>
 
-						<Section
-							icon={<MessageCircle className="h-4 w-4" />}
-							index={4}
-							subtitle={
-								greetings.length === 0
-									? "Opening turns the downstream chat says before the user types anything. None yet."
-									: "Opening turns the downstream chat says before the user types anything, in chronological order. Not every cast member speaks."
-							}
-							tag={
-								greetings.length > 0
-									? String(greetings.length).padStart(2, "0")
-									: undefined
-							}
-							title="Greeting messages"
-						>
-							<GreetingMessages
-								deletingGreetingIdx={deletingGreetingIdx}
-								greetingBusyFor={greetingBusyFor}
-								greetingError={greetingError}
-								greetings={greetings}
-								memberByFirstName={memberByFirstName}
-								members={members}
-								onDeleteGreeting={handleDeleteGreeting}
-								onGenerateGreeting={handleGenerateGreeting}
-								onGreetingSave={handleGreetingSave}
-							/>
-						</Section>
-					</div>
-				</main>
-			</div>
-		</div>
+					<Section
+						icon={<MessagesSquare className="h-4 w-4" />}
+						index={4}
+						subtitle={
+							greetings.length === 0
+								? "Opening turns the downstream chat says before the user types anything. None yet."
+								: "Opening turns the downstream chat says before the user types anything, in chronological order. Not every cast member speaks."
+						}
+						tag={
+							greetings.length > 0
+								? String(greetings.length).padStart(2, "0")
+								: undefined
+						}
+						title="Greeting messages"
+					>
+						<GreetingMessages
+							deletingGreetingIdx={deletingGreetingIdx}
+							greetingBusyFor={greetingBusyFor}
+							greetingError={greetingError}
+							greetings={greetings}
+							memberByFirstName={memberByFirstName}
+							members={members}
+							onDeleteGreeting={handleDeleteGreeting}
+							onGenerateGreeting={handleGenerateGreeting}
+							onGreetingSave={handleGreetingSave}
+						/>
+					</Section>
+				</div>
+			</ConversationTargetDetailLayout>
+		</>
 	);
 }
 

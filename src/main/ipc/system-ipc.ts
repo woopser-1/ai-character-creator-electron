@@ -1,13 +1,38 @@
-import { ipcMain, shell } from "electron";
 import type { UpdateInfo } from "@shared/updates";
-import { checkClaudeAvailable } from "../claude/runner";
+import { generateText } from "ai";
+import { ipcMain, shell } from "electron";
+import { getLanguageModel } from "../llm/provider";
+import { getApiKey } from "../storage/credentials";
+import { getSettings } from "../storage/settings";
 import { checkForUpdate } from "../updates/check";
 import type { IpcCtx } from "./helpers";
 
 export function registerSystemIpc({ window }: IpcCtx): void {
-	ipcMain.handle("claude:check", async () => {
-		return checkClaudeAvailable();
-	});
+	ipcMain.handle(
+		"openrouter:test",
+		async (): Promise<{ ok: boolean; error?: string }> => {
+			const key = await getApiKey();
+			if (!key)
+				return { ok: false, error: "No OpenRouter API key configured." };
+
+			try {
+				const settings = await getSettings();
+				const model = await getLanguageModel(settings.mainModel);
+				await generateText({
+					model,
+					prompt: "ping",
+					maxOutputTokens: 1,
+					abortSignal: AbortSignal.timeout(20_000),
+				});
+				return { ok: true };
+			} catch (error) {
+				return {
+					ok: false,
+					error: error instanceof Error ? error.message : String(error),
+				};
+			}
+		},
+	);
 
 	ipcMain.handle("updates:check", async (): Promise<UpdateInfo> => {
 		return checkForUpdate();

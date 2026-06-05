@@ -19,7 +19,7 @@ export type StepStatus =
 	| "refusal-detected";
 
 export interface StepUsage {
-	model: "haiku" | "sonnet" | "opus";
+	model: string;
 	inputTokens: number;
 	outputTokens: number;
 	cacheReadTokens: number;

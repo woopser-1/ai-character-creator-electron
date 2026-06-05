@@ -42,8 +42,8 @@ export function withConfirmedMeasurements(
 	const block = [
 		"## CONFIRMED MEASUREMENTS (use these EXACT values, do not change)",
 		`- Height: ${measurements.heightCm} cm`,
-		`- Bust: ${measurements.bustCm} cm`,
-		`- Cup size: ${measurements.cupSize}`,
+		`- Chest/Bust: ${measurements.bustCm} cm`,
+		`- Cup size or N/A: ${measurements.cupSize}`,
 		`- Waist: ${measurements.waistCm} cm`,
 		`- Hips: ${measurements.hipsCm} cm`,
 	].join("\n");
