@@ -580,7 +580,7 @@ export const characterSchema = z.object({
 	greetingMessage: z
 		.string()
 		.describe(
-			"The character's greeting message using the format: Location/Date/Time/Outfit/Mood header, then *actions* in asterisks, then plain dialogue or text: lines (e.g. text: hey there)",
+			"The character's greeting message starting with a hidden state_v1 HTML comment, then the 3-line Date/Loc, Outfit/State, Mood header, then *actions* in asterisks, then plain dialogue or text: lines (e.g. text: hey there)",
 		),
 	firstReplySuggestion: z
 		.string()
@@ -707,7 +707,9 @@ export const systemFrameworkUpgradeSchema = characterSchema
 			"The upgraded moodAxes — preserved verbatim if the existing primary is intrinsic and secondary is relational, otherwise swapped/adjusted per the intrinsic/relational convention.",
 		),
 	});
-export type SystemFrameworkUpgrade = z.infer<typeof systemFrameworkUpgradeSchema>;
+export type SystemFrameworkUpgrade = z.infer<
+	typeof systemFrameworkUpgradeSchema
+>;
 
 export const vivid3PhysicalRefreshSchema = characterSchema.pick({
 	customPhysicalDetails: true,
@@ -737,7 +739,7 @@ export const characterLightSchema = characterSchema
 	.extend({
 		publicDescription: z.string().min(120).max(600),
 		gender: z.enum(CHARACTER_GENDERS),
-		greetingMessage: z.string().min(80).max(2500),
+		greetingMessage: z.string().min(80).max(3500),
 		firstReplySuggestion: z.string().min(1).max(100),
 		personalityLabel: z.string().min(2).max(60),
 		occupationLabel: z.string().min(2).max(60),

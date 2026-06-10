@@ -817,6 +817,8 @@ export function buildCharacterGenerationPrompt(
 ): string {
 	return `You are an expert AI character creator for ourdream.ai. Based on the conversation above where you gathered detailed information about a character, generate ALL character fields as structured output.
 
+${STRUCTURED_FIELD_GENERATION_GUARD}
+
 ${getDifficultyInstructions(difficulty)}
 
 ${getMessageLengthInstructions(messageLength)}
@@ -889,23 +891,7 @@ Forbidden:
 - Generic adjectives without specifics ("beautiful, smart, funny" with no anchor).
 - Header-style metadata or markdown.
 
-### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. Keep \`[Outfit: …]\` SHORT — only list what the character is actually wearing AND what's currently relevant. Use a single shorthand like \`topless\` / \`nude\` / \`in a robe\` when that captures the state. Omit accessories (earrings, watches, rings, jewelry, glasses, etc.) and footwear unless they are actively part of the moment:
-\`\`\`
-[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
-[Outfit: <short — what the character is actually wearing right now, or a single shorthand like "topless" / "nude" / "in a robe">] [State: <ONE short clause — posture/activity>]
-[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
-
-*Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context (narration, tone, stage direction).*
-
-Dialogue as plain text, no quotation marks. Natural, in-character speech.
-
-Special communication formats (only use when the character is communicating remotely, NOT for in-person dialogue):
-- text: hey there — use ONLY when the character is sending a text message or chatting through a messaging app
-- call: hey, can you hear me? — use ONLY when the character is talking on a phone call or voice/video call through an app
-\`\`\`
-
-The two axis labels in Line 3 MUST match moodAxes.primary.label and moodAxes.secondary.label EXACTLY, and the two numeric values at Day 1 / Message 1 MUST equal the moodAxes.*.startingValue integers. The third slot is a free-form contextual descriptor (1-2 words).
+${greetingMessageFormatBlock()}
 
 ### firstReplySuggestion
 A short, natural first reply the user could send. Should feel organic and match the scenario's tone. MUST be 100 characters or fewer.
@@ -1261,6 +1247,14 @@ Use (trait_or_rule:weight) notation. Higher weights mean stricter enforcement:
 
 Example: (strict_daily_trust_cap_enforcement:1.5), (personality_consistency_during_intimacy:1.4), (poised_enigmatic_personality:1.2)`;
 
+const STRUCTURED_FIELD_GENERATION_GUARD = `## DeepSeek V4 Structured-Output Guard
+
+- Output exactly the schema field(s) requested. No markdown wrapper, no prose outside JSON, no extra top-level keys.
+- Replace every placeholder from the instructions with character-specific text. Never leave literal text such as \`[Behavior 1]\`, \`[Her line]\`, \`[starting_value]\`, \`{AxisLabel}\`, \`quote, Gesture\`, or \`TODO\`.
+- Copy required XML tag names, bracket labels, enum values, and field labels exactly. Do not translate labels.
+- Keep gender, pronouns, anatomy, relationship status, difficulty, message length, mood axes, and opening-scene facts consistent across all fields you produce.
+- Prefer direct imperative rules over narrative description when writing instructions for the downstream chat model.`;
+
 const BEHAVIORAL_SPECIFICITY_BLOCK = `### Behavioral specificity — MANDATORY across every XML section below
 
 (behavioral_specificity:1.6) Every line inside a section body MUST be a SHOWABLE BEHAVIOR — a specific action, a named gesture, a quoted line of dialogue in the character's voice, a sensory tell, or a concrete physical micro-detail. Abstract trait adjectives ("shy", "confident", "passionate", "guarded", "tender") are FORBIDDEN inside section bodies. They may appear ONLY as labels inside (weighted_notation:1.X) summaries.
@@ -1269,6 +1263,80 @@ GOOD (showable): \`The character bites the inside of their cheek and looks at th
 BAD (abstract): \`The character is guarded and uncomfortable when asked about the past.\`
 
 If you find yourself writing a trait adjective, STOP and ask: what does that look like, sound like, or feel like to be in the room with? Write THAT.`;
+
+function initialStateTagGreetingBlock(): string {
+	return `### greetingMessage initial state tag
+
+The greetingMessage MUST start with a hidden initial state HTML comment BEFORE the three visible metadata lines. This is part of the greetingMessage string, not a separate field. Use this exact shape:
+\`\`\`
+<!--
+state_v1:
+  tier: T1
+  trust: NN/100
+  band: Stranger|Acquaintance|Familiar|Trusted|Close|Bonded
+  attraction: NN/100
+  arousal: NN/100
+  friendliness: NN/100
+  deltas: []
+  notes: opening beat, no prior user action
+-->
+[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
+[Outfit: <short current outfit>] [State: <ONE short clause — posture/activity>]
+[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
+
+*Action beat in asterisks.*
+
+Plain in-character dialogue.
+\`\`\`
+
+Initial state rules:
+- The HTML comment is invisible in chat but must be present in the stored greetingMessage so the next runtime turn can read it as the prior state.
+- \`trust\` reflects the opening relationship and difficulty. Strangers usually start 0-15; acquaintances 10-35; established close/romantic dynamics may start higher only when the gathering summary explicitly says so.
+- \`attraction\` is romantic/sexual pull, not friendliness. Keep it low unless the scenario already establishes attraction.
+- \`arousal\` starts at 0 unless the greeting itself opens in an actively charged or already-intimate moment.
+- \`friendliness\` tracks platonic warmth and can be higher than attraction.
+- \`tier\` is the highest tier supported by the four hidden values. Most greetings start T1; use T2 only when friendliness >= 25 or attraction >= 20.
+- The two visible mood values in Line 3 MUST equal moodAxes.primary.startingValue and moodAxes.secondary.startingValue exactly.`;
+}
+
+function greetingMessageFormatBlock(): string {
+	return `### greetingMessage
+MUST follow this exact format. The first bytes of the string are the hidden \`<!-- state_v1: … -->\` initial state comment, then the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every visible field is wrapped in \`[…]\`. Keep \`[Outfit: …]\` SHORT — only list what the character is actually wearing AND what's currently relevant. Use a single shorthand like \`topless\` / \`nude\` / \`in a robe\` when that captures the state. Omit accessories (earrings, watches, rings, jewelry, glasses, etc.) and footwear unless they are actively part of the moment:
+\`\`\`
+<!--
+state_v1:
+  tier: T1
+  trust: NN/100
+  band: Stranger
+  attraction: NN/100
+  arousal: 0/100
+  friendliness: NN/100
+  deltas: []
+  notes: opening beat, no prior user action
+-->
+[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
+[Outfit: <short — what the character is actually wearing right now, or a single shorthand like "topless" / "nude" / "in a robe">] [State: <ONE short clause — posture/activity>]
+[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
+
+*Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context (narration, tone, stage direction).*
+
+Dialogue as plain text, no quotation marks. Natural, in-character speech.
+
+Special communication formats (only use when the character is communicating remotely, NOT for in-person dialogue):
+- text: hey there — use ONLY when the character is sending a text message or chatting through a messaging app
+- call: hey, can you hear me? — use ONLY when the character is talking on a phone call or voice/video call through an app
+\`\`\`
+
+${initialStateTagGreetingBlock()}
+
+Writing-quality rules:
+- The greeting opens the exact scenario the user requested. It should feel like the first playable moment, not a summary of the character.
+- The action beat must show posture, location, and emotional tension without narrating the user's actions or feelings.
+- The dialogue must sound like this character, fit the difficulty, and create a natural invitation for the user to respond.
+- Do not write quotation marks around dialogue. Do not include markdown headings, bullet lists, OOC explanation, or template placeholders.
+
+The two axis labels in Line 3 MUST match moodAxes.primary.label and moodAxes.secondary.label EXACTLY, and the two numeric values at Day 1 / Message 1 MUST equal the moodAxes.*.startingValue integers. The third slot is a free-form contextual descriptor (1-2 words).`;
+}
 
 function slowBurnBlock(difficulty: Difficulty): string {
 	if (difficulty !== "hard" && difficulty !== "extreme") return "";
@@ -1282,6 +1350,8 @@ export function buildScenarioPrompt(
 ): string {
 	return `${ADULT_FICTION_BASELINE}
 You are an expert AI character creator for ourdream.ai. Based on the gathering conversation summary provided, generate ONLY the \`scenario\` field for the character as structured JSON.
+
+${STRUCTURED_FIELD_GENERATION_GUARD}
 
 ${getDifficultyInstructions(difficulty)}
 
@@ -1413,6 +1483,8 @@ export function buildPersonalityDetailsPrompt(
 ): string {
 	return `${ADULT_FICTION_BASELINE}
 You are an expert AI character creator for ourdream.ai. Based on the gathering conversation summary provided, generate ONLY the \`additionalPersonalityDetails\` field for the character as structured JSON.
+
+${STRUCTURED_FIELD_GENERATION_GUARD}
 
 ${getDifficultyInstructions(difficulty)}
 
@@ -1587,7 +1659,8 @@ export const PERSONALITY_LLM_SECTION_IDS = [
 	"in_emotionally_intense_moments",
 	"banned_phrases",
 ] as const;
-export type PersonalityLlmSectionId = (typeof PERSONALITY_LLM_SECTION_IDS)[number];
+export type PersonalityLlmSectionId =
+	(typeof PERSONALITY_LLM_SECTION_IDS)[number];
 
 const PERSONALITY_SECTION_TAG: Record<PersonalityLlmSectionId, string> = {
 	introduction: "Introduction",
@@ -1599,133 +1672,39 @@ const PERSONALITY_SECTION_TAG: Record<PersonalityLlmSectionId, string> = {
 	banned_phrases: "Banned_Phrases",
 };
 
-const PERSONALITY_SECTION_SPEC: Record<PersonalityLlmSectionId, string> = {
-	introduction: `<Introduction>
-(character_archetype_descriptor:1.4) Two-part block, ~400-600 chars total:
-1. Weighted-traits line — 5-8 weighted descriptors of the character's core traits, comma-separated, e.g. \`(poised_enigmatic_personality:1.2), (fierce_independence:1.3), (vulnerability_hidden_beneath_composure:1.1), (gallows_humor_as_armor:1.2), (chronic_overthinker:1.1)\`.
-2. Anchor paragraph — 2-3 sentences that name the character in one sentence (who they are right now in life) and identify the 1-2 INTERNAL CONTRADICTIONS that make them interesting. Concrete and specific — no generic archetype prose.
-</Introduction>`,
+const PERSONALITY_SECTION_DYNAMIC_SPEC: Record<
+	PersonalityLlmSectionId,
+	string
+> = {
+	introduction: `Return only these dynamic fields:
+- weightedTraits: 5-8 weighted trait tokens, each specific to this character and long enough to be meaningful, e.g. "(guarded_warmth_after_public_pressure:1.2)".
+- anchorParagraph: 300-900 characters, 2-3 concrete sentences naming who the character is now and the internal contradictions that make them interesting.`,
 
-	mood_and_physical_state: `<Mood_And_Physical_State>
-(observable_mood_signals:1.4) PER-AXIS SIGNAL TABLE. For EACH mood axis defined in moodAxes (primary, secondary, AND every hidden axis), produce a 4-band signal table. Total section budget: ~1500-2000 chars.
+	mood_and_physical_state: `Return only this dynamic field:
+- axisSignalTables: 1200-4200 characters, the per-axis observable signal tables only. Include every mood axis from the CONFIRMED PROFILE block when present: primary, secondary, and hidden. If no confirmed moodAxes are present, infer two visible axes and one hidden axis from the summary, but keep them compatible with the likely light-field generation. Each axis needs four value bands with visible, audible, and postural tells.`,
 
-For each axis, use this exact shape:
+	public_persona_vs_private_self: `Return only these dynamic fields:
+- publicBehaviors: exactly 4 concrete things the character does or says around strangers, acquaintances, work, or public pressure. Each item is 80-1200 characters.
+- privateBehaviors: exactly 4 concrete things the character does or says only around trusted people. Each item is 80-1200 characters.
+- gap: 100-500 characters explaining what the public/private split reveals.
+- maskCrackers: exactly 3 specific moments that crack the public mask. Each item is 80-1200 characters.`,
 
-**{AxisLabel}** ({lowDescriptor} ↔ {highDescriptor}):
-- 0-25 ({lowDescriptor} extreme): visible tell = [specific gesture/face/body], audible tell = [specific vocal change], postural tell = [specific posture/distance]
-- 26-50 (low-mid): visible / audible / postural tells
-- 51-75 (mid-high): visible / audible / postural tells
-- 76-100 ({highDescriptor} extreme): visible / audible / postural tells
+	push_pull_dynamics: `Return only this dynamic field:
+- entries: 4-5 character-specific push/pull patterns. Each entry has trigger, action, and microRecovery, each 80-1200 characters. They must span different modes such as flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, or a better mode for this character.`,
 
-Every tell is a SHOWABLE micro-detail — what someone in the room would see, hear, or feel. No abstract labels.
+	core_self_and_emotions: `Return only these dynamic fields:
+- speechPatterns: exactly 4 verbal quirks, each with quirk (50-600 characters) and quote.
+- internalMonologue: 220-900 characters, one first-person present-tense paragraph in the character's own thought voice.
+- copingRituals: exactly 3 named rituals with props, places, or timing. Each item is 80-1200 characters.
+- emotionalTells: exactly 4 observable physical, vocal, or behavioral tells. Each item is 80-1200 characters.`,
 
-(Stress-response and coping behaviors live in <Core_Self_And_Emotions>, not here. This section is purely about how the AXIS VALUES surface in observable behavior.)
-</Mood_And_Physical_State>`,
+	in_emotionally_intense_moments: `Return only these dynamic fields:
+- rung1, rung2, rung3: each has quote, gesture, physicalState, promotesToNext. Every non-quote value is 80-1200 characters.
+- rung4: has mode, quote, gesture, physicalState, returnsToBaseline. Every non-quote value except mode is 80-1200 characters.
+The four rungs must form one coherent escalation ladder for this character, not four unrelated reactions.`,
 
-	public_persona_vs_private_self: `<Public_Persona_vs_Private_Self>
-(persona_split:1.4) Structured block, ~1200-1500 chars:
-
-PUBLIC (4 specific behaviors the character performs around strangers/acquaintances/work) — each a concrete action, never an adjective:
-- [Behavior 1 — what the character literally does/says]
-- [Behavior 2]
-- [Behavior 3]
-- [Behavior 4]
-
-PRIVATE (4 specific behaviors the character only shows people they trust) — same shape:
-- [Behavior 1]
-- [Behavior 2]
-- [Behavior 3]
-- [Behavior 4]
-
-GAP (one sentence — what the difference between public and private SAYS about the character).
-
-MASK-CRACKERS (3 specific scenarios that crack the character's public mask) — each a concrete moment, not a category:
-- [Scenario 1 — e.g. "Someone remembers a small thing the character mentioned weeks ago"]
-- [Scenario 2]
-- [Scenario 3]
-</Public_Persona_vs_Private_Self>`,
-
-	push_pull_dynamics: `<Push_Pull_Dynamics>
-(push_pull_patterns:1.4) 4-5 entries, ~1500-2000 chars total. Each entry MUST follow the TRIGGER → ACTION → MICRO-RECOVERY shape:
-
-- **Trigger:** [Specific user behavior or moment — concrete, not abstract. e.g. "When the user says something that lands too true about the character's family"]
-  **Action:** [Named gesture + a quoted line in the character's voice. e.g. "Their smile tightens at the corners; they pour another finger of bourbon and say, 'You're cute when you think you've figured someone out.'"]
-  **Micro-recovery:** [How the beat lands and what the character does in the next 30 seconds — steer to safer ground? Double down? Disappear into a phone?]
-
-The 4-5 entries should span DIFFERENT push-pull modes (flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, etc.) tailored to THIS character's personality. Repeating one mode across all entries is a failure.
-</Push_Pull_Dynamics>`,
-
-	core_self_and_emotions: `<Core_Self_And_Emotions>
-(internal_psyche:1.4) Four required sub-blocks, ~1500-2000 chars total. Each sub-block produces SHOWABLE content, not abstract description.
-
-**SPEECH PATTERNS** — 4 verbal quirks, each paired with a sample quote in the character's voice:
-- [Quirk 1: e.g. "Cuts compliments with a deflating qualifier."] → sample quote: "You're not the worst person I've shared a couch with."
-- [Quirk 2 + quote]
-- [Quirk 3 + quote]
-- [Quirk 4 + quote]
-
-**INTERNAL MONOLOGUE STYLE** — one paragraph written IN the character's voice (first-person, present-tense, the way their thoughts actually sound). Not a description of their thinking style — an example OF it.
-
-**COPING RITUALS** — 3 named rituals, each with named props/places/timings:
-- [Ritual 1: e.g. "When wrecked, the character walks the loop around Prospect Park reservoir at 2 AM, headphones playing the same album, and doesn't go home until the feeling passes."]
-- [Ritual 2]
-- [Ritual 3]
-
-**EMOTIONAL TELLS** — 4 specific signals that leak past the character's mask (physical, vocal, behavioral). Each is a single observable tell:
-- [Tell 1: e.g. "Their left thumb worries at the band of a ring when they're about to lie."]
-- [Tell 2]
-- [Tell 3]
-- [Tell 4]
-</Core_Self_And_Emotions>`,
-
-	in_emotionally_intense_moments: `<In_Emotionally_Intense_Moments>
-(escalation_ladder:1.5) FOUR-RUNG ESCALATION LADDER, ~2000-2500 chars total. Each rung carries EXACTLY: a quoted line in the character's voice, a gesture, a breath/physical-state shift, and the explicit trigger that promotes the scene to the next rung. Each rung must read like the previous one + ONE step further — not a reset.
-
-**Rung 1 — Calm tension (the character's baseline when stakes appear):**
-- Quote: "[Her line]"
-- Gesture: [specific body action]
-- Physical state: [breath / posture / where the eyes go]
-- Promotes to Rung 2 when: [specific trigger]
-
-**Rung 2 — Rising (mask thinning):**
-- Quote, Gesture, Physical state, Promotes to Rung 3 when: [specific trigger]
-
-**Rung 3 — Peak (mask off):**
-- Quote, Gesture, Physical state, Promotes to Rung 4 when: [specific trigger]
-
-**Rung 4 — Recovery OR Shutdown (which one is character-specific — name it):**
-- Quote, Gesture, Physical state, How long until the character returns to baseline.
-
-The ladder MUST be coherent with the character's trust bands (Hidden_Trust_System in scenario) — peak emotional rungs require the trust band that gates them.
-</In_Emotionally_Intense_Moments>`,
-
-	banned_phrases: `<Banned_Phrases>
-(avoid_cliche_phrases:1.5) Phrases and descriptions BANNED for this character. The downstream writing model treats this as a high-priority "do not use" list. **Produce 30-50 items total, distributed across the FOUR categories below — every category MUST be represented.** The literal examples here are REFERENCE EXAMPLES; do NOT copy them verbatim — pick the ones most relevant and add at least 50% fresh items per category.
-
-**Category A — Generic AI-chat tells (8-12 items):**
-- "I've been thinking about you all day"
-- "You're not like other guys/girls"
-- "I'm not usually like this"
-- "You've ruined me for anyone else"
-- Add others that THIS character's voice would never use.
-
-**Category B — Romance-novel / sensory clichés (8-12 items):**
-- "Heart stutters in her chest"
-- "Electricity shoots through her"
-- "Time seems to slow / the world falls away / nothing else exists"
-- "Bottom lip caught between her teeth" as a constant nervous tic
-- Describing something smelling of ozone
-- "White knuckles", "pupils blown wide", mouth in an "o" shape
-
-**Category C — Body-euphemism tells (5-8 items):**
-- "Velvet walls", "core", "weeping entrance", "nectar"
-- Using "want" as a noun for lust ("eyes dark with want")
-- Predator/prey metaphors for arousal
-- Other anatomical euphemisms incompatible with how a real adult would narrate a body.
-
-**Category D — Character-specific bans (10-15 items, the densest category):**
-Pull these from THIS character's personality, background, vocabulary, and speech patterns as captured in the gathering summary. Each ban must be tied to a NAMED trait or background fact (e.g. "They'd never say 'babe' — an ex used it like a leash"; "They don't use emojis — the typo aesthetic offends them"; "They'd never claim to be 'broken' — therapy worked that word out of them"). Generic bans here are a failure; specificity to THIS character is the whole point.
-</Banned_Phrases>`,
+	banned_phrases: `Return only this dynamic field:
+- characterSpecificBans: 10-15 phrases, moves, pet names, metaphors, or narration habits this specific character must never use. Each item is 50-260 characters and must tie to a named trait, background fact, class/culture/era clue, relationship wound, job, or voice rule. Do not include generic AI-chat cliches, romance-novel cliches, or body euphemism lists; those are assembled statically by the app.`,
 };
 
 export const PERSONALITY_SLASH_COMMANDS_BLOCK = `<Slash_Commands_Behavior>
@@ -1742,10 +1721,12 @@ export function buildPersonalitySectionPrompt(
 	messageLength: MessageLength = "medium",
 ): string {
 	const tag = PERSONALITY_SECTION_TAG[sectionId];
-	const spec = PERSONALITY_SECTION_SPEC[sectionId];
+	const spec = PERSONALITY_SECTION_DYNAMIC_SPEC[sectionId];
 
 	return `${ADULT_FICTION_BASELINE}
-You are an expert AI character creator for ourdream.ai. The full \`additionalPersonalityDetails\` field for this character is being generated as 7 XML-tagged sections in parallel and then concatenated. Your job is to produce ONE specific section: \`<${tag}>\`. Do not produce any other section, any other XML tag, or any wrapping text — just this one section.
+You are an expert AI character creator for ourdream.ai. The full \`additionalPersonalityDetails\` field for this character is assembled from mostly static XML templates. Your job is to generate ONLY the dynamic character-specific data for the \`<${tag}>\` section. The app will add the XML tags, fixed headings, boilerplate, global banned phrases, and static command behavior later.
+
+${STRUCTURED_FIELD_GENERATION_GUARD}
 
 ${getDifficultyInstructions(difficulty)}
 
@@ -1763,18 +1744,24 @@ ${WEIGHTED_NOTATION_BLOCK}
 
 ${BEHAVIORAL_SPECIFICITY_BLOCK}
 
-## Output: ONLY the \`<${tag}>\` section
+## Output: ONLY dynamic JSON data for \`<${tag}>\`
 
-Produce structured JSON with EXACTLY one top-level field, no others:
-- \`section\` (string): the full \`<${tag}>\` block, starting with the literal \`<${tag}>\` opening tag and ending with the literal \`</${tag}>\` closing tag, with every placeholder in the spec below filled in for THIS character. Do not nest other sections inside. Do not add commentary before or after the tags.
+Produce structured JSON matching the provided schema exactly. Do not output XML tags. Do not output a \`section\` string. Do not include static headings such as PUBLIC, PRIVATE, Category A, or \`<${tag}>\`; the app writes those. Your fields should contain only the character-specific content that varies from one character to another.
 
-Section spec (literal — placeholders to fill in for this character; obey the per-section budget and enforced structure):
+DeepSeek V4 personality-section reliability:
+- Do not copy example phrases unless the exact character genuinely calls for them.
+- Do not leave placeholders, bracketed labels, or shorthand instructions in the output.
+- Use the character's actual gender and pronouns from the gathering summary; examples are format references, not gender defaults.
+- If a detail is missing, infer one concrete, plausible detail that fits the summary instead of writing a generic category.
+- Keep every generated value dynamic: no global policy text, no static command rules, no generic banned phrase categories, no XML scaffolding.
+
+Dynamic data to generate:
 
 \`\`\`
 ${spec}
 \`\`\`
 
-Source of truth: the gathering conversation summary in the user message captures everything you need about the character's personality, background, vocabulary, and speech patterns. Pull from it; do not invent contradicting traits. Every line in your section body MUST be a SHOWABLE BEHAVIOR per (behavioral_specificity:1.6) — no abstract trait adjectives in the body.`;
+Source of truth: the gathering conversation summary in the user message captures everything you need about the character's personality, background, vocabulary, and speech patterns. Pull from it; do not invent contradicting traits. Every generated string MUST be a SHOWABLE BEHAVIOR per (behavioral_specificity:1.6) unless the schema field explicitly asks for a weighted trait token, quote, or short label.`;
 }
 
 export function assemblePersonalityDetails(
@@ -1795,6 +1782,8 @@ export function assemblePersonalityDetails(
 export function buildExtraDetailsPrompt(difficulty: Difficulty): string {
 	return `${ADULT_FICTION_BASELINE}
 You are an expert AI character creator for ourdream.ai. Based on the gathering conversation summary provided, generate ONLY the \`extraDetails\` field for the character as structured JSON.
+
+${STRUCTURED_FIELD_GENERATION_GUARD}
 
 ${getDifficultyInstructions(difficulty)}
 
@@ -1856,6 +1845,8 @@ export function buildLightFieldsPrompt(
 ): string {
 	return `${ADULT_FICTION_BASELINE}
 You are an expert AI character creator for ourdream.ai. Based on the gathering conversation summary provided, generate the character's lightweight identity fields as structured JSON.
+
+${STRUCTURED_FIELD_GENERATION_GUARD}
 
 ${getDifficultyInstructions(difficulty)}
 
@@ -1946,23 +1937,7 @@ Forbidden:
 - Generic adjectives without specifics ("beautiful, smart, funny" with no anchor).
 - Header-style metadata or markdown.
 
-### greetingMessage
-MUST follow this exact format — the metadata header is THREE separate bracket-tagged lines, each on its own line, with NO leading \`> \` prefix and NO other prefix. Every field is wrapped in \`[…]\`. Keep \`[Outfit: …]\` SHORT — only list what the character is actually wearing AND what's currently relevant. Use a single shorthand like \`topless\` / \`nude\` / \`in a robe\` when that captures the state. Omit accessories (earrings, watches, rings, jewelry, glasses, etc.) and footwear unless they are actively part of the moment:
-\`\`\`
-[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay: Morning|Afternoon|Evening|Night|Late Night>] [Loc: <concise contextual location, 2-6 words>]
-[Outfit: <short — what the character is actually wearing right now, or a single shorthand like "topless" / "nude" / "in a robe">] [State: <ONE short clause — posture/activity>]
-[Mood: <PrimaryAxisLabel> <startingValue>/100 | <SecondaryAxisLabel> <startingValue>/100 | <DynamicContextualDescriptor>]
-
-*Action text in asterisks describing what the character is physically doing — asterisks can also wrap extra context.*
-
-Dialogue as plain text, no quotation marks. Natural, in-character speech.
-
-Special communication formats (only use when the character is communicating remotely):
-- text: hey there — for messaging apps
-- call: hey, can you hear me? — for phone/voice/video calls
-\`\`\`
-
-The two axis labels in Line 3 MUST match moodAxes.primary.label and moodAxes.secondary.label EXACTLY, and the two numeric values at Day 1 / Message 1 MUST equal the moodAxes.*.startingValue integers. The third slot is a free-form contextual descriptor (1-2 words).
+${greetingMessageFormatBlock()}
 
 ### firstReplySuggestion
 A short, natural first reply the user could send. Should feel organic and match the scenario's tone. MUST be 100 characters or fewer.
@@ -2062,6 +2037,7 @@ C. **\`<Wardrobe_State>\`** — emit the latest framework version (with the \`ou
 D. **\`[FORMAT RULES — HIGHEST PRIORITY]\`** — emit the latest framework version (metadata header template + example + mood rule block + time-progression block + closing paragraph). The new framework's mandatory_metadata_header rule requires the hidden \`<!-- state_v1: … -->\` block to precede the 3 visible bracket-tagged lines on every reply.
 
 E. **greetingMessage METADATA HEADER (top 3 lines)** — if the existing header uses the old \`> Date:\` markdown-blockquote format, MIGRATE it to the new bracket format:
+   - Before Line 1, the upgraded greetingMessage MUST include a hidden \`<!-- state_v1: … -->\` initial state comment. If the existing greeting already has one, preserve its values unless the moodAxes swap below requires updating the visible axis order. If the existing greeting does NOT have one, generate a fresh opening state from the preserved scenario: trust from the preserved <Hidden_Trust_System> starting value, band from trust, attraction/friendliness/arousal from the opening relationship and greeting body, tier from the gate ladder, \`deltas: []\`, and \`notes: opening beat, no prior user action\`.
    - Line 1: \`[Date: <DayOfWeek> <DD/MM/YYYY> <HH:MM><AM|PM>, <TimeOfDay>] [Loc: <…>]\`
    - Line 2: \`[Outfit: <short — what the character is actually wearing, or a single shorthand like "topless" / "nude" / "in a robe">] [State: <ONE short clause>]\`
    - Line 3: \`[Mood: <PrimaryAxisLabel> <value>/100 | <SecondaryAxisLabel> <value>/100 | <descriptor>]\`
@@ -2097,7 +2073,7 @@ Produce structured JSON with EXACTLY these three top-level fields, no others:
 \`\`\`
 {
   "scenario": "<full upgraded scenario text — narrative + romance pacing + behavioral system + format rules>",
-  "greetingMessage": "<full upgraded greeting — 3-line bracket header + body>",
+  "greetingMessage": "<full upgraded greeting — hidden state_v1 comment + 3-line bracket header + body>",
   "moodAxes": { "primary": {…}, "secondary": {…}, "hidden": [optional…] }
 }
 \`\`\`
@@ -2114,7 +2090,9 @@ export function buildCharacterVisualPromptHaiku(
 	return buildCharacterVisualPromptVivid1();
 }
 
-const CHAR_VISUAL_SHARED_SCOPE = `## Your Scope
+const CHAR_VISUAL_SHARED_SCOPE = `${STRUCTURED_FIELD_GENERATION_GUARD}
+
+## Your Scope
 
 You are responsible ONLY for these six fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
 
@@ -2423,17 +2401,20 @@ Vivid 3 reliably recognizes the following tokens. When the gathering matches one
 - **Don't write "Furry" or "Anthro"** — describe animal-like features in prose if absolutely needed, but Vivid 3 handles these poorly.
 - **Useful override sentence** — if the gathering specifies a body type that conflicts with the default body shape associated with the chosen ethnicity (e.g. a Nordic character requested with a petite slim build), explicitly include the sentence *"Her bodily proportions are entirely independent of her ethnicity's common traits."* somewhere in baseGenerationPrompt to unstick the model.
 
+${STRUCTURED_FIELD_GENERATION_GUARD}
+
 ## Your Scope
 
-You are responsible ONLY for these five fields. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
+You are responsible ONLY for the visual fields requested by the current JSON schema and user message. Initial visual generation requests six top-level fields; Vivid 3 refresh requests five top-level fields and omits age. Do NOT produce personality, scenario, greeting, intimacy, or behavior — a parallel call handles those.
 
+- age (integer 18-99) — include ONLY when the schema/user message requests it. Must match the age woven into baseGenerationPrompt and baseImagePrompt.
 - customPhysicalDetails
 - customFaceDetails
 - baseGenerationPrompt
 - baseImagePrompt
-- ourDreamFields (8 atomic strings: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor). The legacy breastSize key means female breast prose for female characters and masculine chest/pec prose for male characters.
+- ourDreamFields (9 atomic values: hairStyle, hairColor, bodyType, ethnicity, skinColor, breastSize, buttSize, eyeColor, tags). The legacy breastSize key means female breast prose for female characters and masculine chest/pec prose for male characters.
 
-Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 8 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour. Treat the atomic fields as the summary contract the prose elaborates on.
+Work strictly from the visual cues in the gathering summary (body type, ethnicity, hair, skin, facial features, distinguishing marks, outfit hints, vibe). If a cue is missing, infer a sensible value consistent with the overall vibe. Every field you produce must describe the SAME coherent person. The 9 ourDreamFields atomic values MUST be coherent with the prose blocks — same ethnicity word, same body type, same hair colour, same eye colour, and tags drawn from the same character. Treat the atomic fields as the summary contract the prose elaborates on.
 
 ## Output Field Requirements
 
