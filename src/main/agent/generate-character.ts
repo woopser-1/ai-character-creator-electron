@@ -239,6 +239,106 @@ const STEP_DEFS: {
 const REFUSAL_PATTERN =
 	/\b(I (can('?| no)t|am unable|won'?t)|I (must|have to) (decline|refuse)|I'm not (able|going to|comfortable)|content (policy|guidelines)|inappropriate|out[- ]of[- ]character|doesn'?t (fit|match|align) (with )?(the|this) (character|personality)|inconsistent with|not (consistent|aligned) with|hors[- ]caract|ne (correspond|colle) pas (au|\u00e0)|incoh[\u00e9e]rent|d[\u00e9e]sol[\u00e9e], je)/i;
 
+interface StringTooBigIssue {
+	path: Array<string | number>;
+	maximum: number;
+	currentLength: number;
+	targetLength: number;
+	reductionChars: number;
+	reductionPercent: number;
+}
+
+function readPathValue(
+	value: unknown,
+	path: ReadonlyArray<string | number>,
+): unknown {
+	return path.reduce<unknown>((acc, key) => {
+		if (acc === null || acc === undefined) return undefined;
+		if (typeof acc !== "object") return undefined;
+		return (acc as Record<string | number, unknown>)[key];
+	}, value);
+}
+
+function formatIssuePath(path: ReadonlyArray<string | number>): string {
+	if (path.length === 0) return "<root>";
+	return path
+		.map((part, index) =>
+			typeof part === "number" ? `[${part}]` : index === 0 ? part : `.${part}`,
+		)
+		.join("");
+}
+
+function collectStringTooBigIssues(
+	error: z.ZodError<unknown>,
+	output: unknown,
+): StringTooBigIssue[] {
+	return error.issues.flatMap((issue) => {
+		const details = issue as z.ZodIssue & {
+			maximum?: unknown;
+			origin?: unknown;
+			path: Array<string | number>;
+		};
+		if (
+			details.code !== "too_big" ||
+			details.origin !== "string" ||
+			typeof details.maximum !== "number"
+		) {
+			return [];
+		}
+
+		const value = readPathValue(output, details.path);
+		if (typeof value !== "string") return [];
+
+		const targetLength = Math.max(1, Math.floor(details.maximum * 0.92));
+		const reductionChars = Math.max(1, value.length - targetLength);
+		const reductionPercent = Math.max(
+			1,
+			Math.ceil((reductionChars / value.length) * 100),
+		);
+
+		return [
+			{
+				path: details.path,
+				maximum: details.maximum,
+				currentLength: value.length,
+				targetLength,
+				reductionChars,
+				reductionPercent,
+			},
+		];
+	});
+}
+
+function buildLengthRepairUserMessage(
+	originalUserMessage: string,
+	previousOutput: unknown,
+	issues: ReadonlyArray<StringTooBigIssue>,
+): string {
+	const targets = issues
+		.map(
+			(issue) =>
+				`- ${formatIssuePath(issue.path)}: currently ${issue.currentLength} characters, hard maximum ${issue.maximum}, target <= ${issue.targetLength}. Reduce by about ${issue.reductionChars} characters (${issue.reductionPercent}%).`,
+		)
+		.join("\n");
+
+	return [
+		"The previous structured JSON output has the right shape, but one or more string fields are too long for validation.",
+		"Revise the previous JSON output. Keep the same top-level fields and preserve the important meaning, behavioral rules, names, formatting requirements, XML tags, and examples.",
+		"Shorten ONLY the listed fields by roughly the requested amount. Do not halve the content unless the requested percentage requires it. Prefer removing repetition, filler, duplicate examples, and over-explained clauses.",
+		"",
+		"Length reduction targets:",
+		targets,
+		"",
+		"Original source context:",
+		originalUserMessage,
+		"",
+		"Previous JSON output to revise:",
+		"```json",
+		JSON.stringify(previousOutput, null, 2),
+		"```",
+	].join("\n");
+}
+
 function clampHiddenStateValue(value: number): number {
 	return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -847,6 +947,86 @@ async function runStepOnce<T>(
 
 	const parsed = def.schema.safeParse(result.structuredOutput);
 	if (!parsed.success) {
+		const tooBigIssues = collectStringTooBigIssues(
+			parsed.error,
+			result.structuredOutput,
+		);
+		if (tooBigIssues.length > 0) {
+			const repairStepLabel = `${def.label}:length-repair`;
+			const repairStartedAt = Date.now();
+			let repairResult: ModelRunResult;
+
+			try {
+				repairResult = await runModel({
+					model: generationModel,
+					systemPrompt: [
+						systemPrompt,
+						"## Length Repair Mode",
+						"You are revising your own previous structured JSON output because one or more string fields were too long. Preserve schema shape exactly. Shorten only the fields named in the user message by roughly the requested percentage.",
+					].join("\n\n"),
+					userMessage: buildLengthRepairUserMessage(
+						userMessage,
+						result.structuredOutput,
+						tooBigIssues,
+					),
+					jsonSchema,
+					stepLabel: repairStepLabel,
+				});
+			} catch (err) {
+				const isAuth = err instanceof MissingApiKeyError;
+				return {
+					ok: false,
+					error: `[${repairStepLabel}] ${isAuth ? "AUTH: " : ""}${String(err)}`,
+					refusal: false,
+					usage,
+				};
+			}
+
+			const repairUsage = extractUsage(
+				generationModel,
+				repairResult,
+				repairStartedAt,
+			);
+			const combinedUsage = aggregateStepUsage(generationModel, [
+				usage,
+				repairUsage,
+			]);
+
+			if (repairResult.success && repairResult.structuredOutput) {
+				const repairParsed = def.schema.safeParse(
+					repairResult.structuredOutput,
+				);
+				if (repairParsed.success) {
+					const repairedData =
+						def.label === "light"
+							? (normalizeLightFields(repairParsed.data as CharacterLight) as T)
+							: repairParsed.data;
+
+					return { ok: true, data: repairedData, usage: combinedUsage };
+				}
+
+				return {
+					ok: false,
+					error: `[${repairStepLabel}] schema validation failed after reducing oversized fields: ${repairParsed.error.message}`,
+					refusal: false,
+					usage: combinedUsage,
+				};
+			}
+
+			const repairText = `${repairResult.error ?? ""} ${repairResult.finalAssistantText ?? ""}`;
+			return {
+				ok: false,
+				error: `[${repairStepLabel}] ${
+					repairResult.error ??
+					(repairResult.finalAssistantText
+						? `no structured output — assistant said: ${repairResult.finalAssistantText.slice(0, 500)}`
+						: "no structured output returned")
+				}`,
+				refusal: REFUSAL_PATTERN.test(repairText),
+				usage: combinedUsage,
+			};
+		}
+
 		const refusal = REFUSAL_PATTERN.test(result.finalAssistantText ?? "");
 		return {
 			ok: false,

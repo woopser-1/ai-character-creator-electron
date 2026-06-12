@@ -591,7 +591,7 @@ export const characterSchema = z.object({
 	scenario: z
 		.string()
 		.describe(
-			"A very descriptive scenario (~2000 chars max). Must include a narrative section and a [FORMAT RULES] block at the end instructing the model to use Location/Date/Time/Outfit/Mood metadata headers, optional text: lines for speech, and asterisks for extra context",
+			"A complete scenario with narrative setup, behavioral systems, metadata header rules, optional text: lines for remote speech, and asterisks for extra context",
 		),
 	additionalPersonalityDetails: z.string(),
 	extraDetails: z.string(),
@@ -671,7 +671,6 @@ export const scenarioOnlySchema = z.object({
 	scenario: z
 		.string()
 		.min(1500)
-		.max(9000)
 		.describe(
 			"Complete scenario field with narrative setup, romance/intimacy pacing, hidden trust system, scene progression, wardrobe state, and format rules.",
 		),
@@ -692,7 +691,6 @@ export const extraDetailsOnlySchema = z.object({
 	extraDetails: z
 		.string()
 		.min(1000)
-		.max(9000)
 		.describe(
 			"Complete XML-tagged lore and memory spec including Setting, Backstory, Relationship_And_Intimacy_History, Key_NPCs, NPC_Voice_Guidance, and Core_Behavior_And_Memory.",
 		),

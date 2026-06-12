@@ -1381,7 +1381,7 @@ ${WEIGHTED_NOTATION_BLOCK}
 
 ## Output: \`scenario\`
 
-Maximum ~4000 characters. Four parts:
+Target ~6000-11,000 characters. Four parts:
 
 1. NARRATIVE (~1400 chars): Rich description of who the character is, the setting, relationship dynamics, how they behave, their mannerisms and speech patterns.
 
