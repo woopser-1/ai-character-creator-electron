@@ -122,6 +122,39 @@ async function runImport(paths: string[]): Promise<ImportResponse> {
 	return { success: true, imported, fileOutcomes };
 }
 
+function buildScenesUpgradeSummary(
+	existing: StoredCharacter,
+	imageModel: ImageModel,
+): string {
+	const character = existing.character;
+	const clip = (value: string, max: number) =>
+		value.length > max ? `${value.slice(0, max)}...` : value;
+	const sceneBlocks = existing.scenes.map((scene, index) =>
+		[
+			`<scene index="${index + 1}" name="${scene.sceneName}">`,
+			`Current positive prompt: ${clip(scene.prompt, 2500)}`,
+			`Current negative prompt: ${scene.negativePrompt ? clip(scene.negativePrompt, 800) : "(none)"}`,
+			"</scene>",
+		].join("\n"),
+	);
+
+	return [
+		`Upgrade the full existing scene set for ${character.firstName} ${character.lastName}.`,
+		`Target image model: ${imageModel}.`,
+		`Gender: ${character.gender ?? "unspecified"}.`,
+		`Difficulty: ${existing.difficulty}.`,
+		`Personality: ${character.personalityLabel}.`,
+		`Occupation: ${character.occupationLabel}.`,
+		`Scenario context: ${clip(character.scenario, 1800)}`,
+		"",
+		`Rewrite exactly ${existing.scenes.length} scenes in the same order. Preserve every sceneName exactly as provided. Preserve each scene's core concept, setting, action, outfit/state, mood, and framing, but upgrade the prompt text to the latest scene framework for the target image model.`,
+		"Every upgraded scene must include the character physical anchor using the canonical stored age and atomic appearance fields. Every upgraded scene must include a fresh negativePrompt with 8-15 concise tags. Do not invent new scenes, remove scenes, split scenes, merge scenes, or rename scenes.",
+		"",
+		"Existing scenes to upgrade:",
+		sceneBlocks.join("\n\n"),
+	].join("\n");
+}
+
 export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 	ipcMain.handle("characters:list", async () => {
 		return listCharacters();
@@ -879,6 +912,48 @@ export function registerCharactersIpc({ window, emitProgress }: IpcCtx): void {
 				imageModel: targetModel,
 				scenes: result.data,
 			});
+			return { success: true, stored: updated };
+		},
+	);
+
+	ipcMain.handle(
+		"characters:upgradeScenes",
+		async (_event, payload: { id: string }): Promise<CharacterResult> => {
+			const existing = await getCharacter(payload.id);
+			if (!existing) {
+				return { success: false, error: `Character ${payload.id} not found` };
+			}
+			if (existing.scenes.length === 0) {
+				return {
+					success: false,
+					error: "This character has no scenes to upgrade",
+				};
+			}
+
+			const settings = await getSettings();
+			const targetModel = existing.imageModel ?? DEFAULT_IMAGE_MODEL;
+			const result = await generateScenes({
+				runId: nanoid(),
+				character: existing.character,
+				gatheringSummary: buildScenesUpgradeSummary(existing, targetModel),
+				superAdmin: settings.superAdmin,
+				imageModel: targetModel,
+				generationModel: settings.mainModel,
+				sceneCount: existing.scenes.length,
+				onEvent: emitProgress,
+			});
+			if (!result.success) {
+				return {
+					success: false,
+					error: result.error ?? "scenes upgrade failed",
+				};
+			}
+
+			const scenes = result.data.map((scene, index) => ({
+				...scene,
+				sceneName: existing.scenes[index]?.sceneName ?? scene.sceneName,
+			}));
+			const updated = await updateCharacter(payload.id, { scenes });
 			return { success: true, stored: updated };
 		},
 	);

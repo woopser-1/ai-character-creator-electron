@@ -13,7 +13,6 @@ import {
 	clampSceneCount,
 	DEFAULT_IMAGE_MODEL,
 	DEFAULT_MAIN_MODEL,
-	DEFAULT_SCENE_COUNT,
 	type ImageModel,
 	type Scene,
 	scenesOutputSchema,
@@ -65,6 +64,66 @@ function extractUsage(
 	};
 }
 
+function getCanonicalAge(character: Character): number | undefined {
+	if (
+		typeof character.age !== "number" ||
+		!Number.isInteger(character.age) ||
+		character.age < 18 ||
+		character.age > 99
+	) {
+		return undefined;
+	}
+
+	return character.age;
+}
+
+function buildCanonicalAgeInstruction(character: Character): string {
+	const age = getCanonicalAge(character);
+	if (age === undefined) {
+		return "Canonical character age is not stored. Infer age only from the character profile fields, never from examples.";
+	}
+
+	return `Canonical character age: ${age}. Every scene prompt MUST use exactly ${age} in the opening persona anchor; never copy or infer another age from examples, mood, lifestyle, or gathering text.`;
+}
+
+function getAgeArticle(age: number, capitalized: boolean): string {
+	const article = age === 18 || Math.floor(age / 10) === 8 ? "an" : "a";
+
+	return capitalized
+		? `${article.charAt(0).toUpperCase()}${article.slice(1)}`
+		: article;
+}
+
+function normalizePromptAge(prompt: string, age: number | undefined): string {
+	if (age === undefined) return prompt;
+
+	const agePhrase =
+		/\b(?:(a|an)\s+)?\d{1,3}\s*(?:-\s*)?years?(?:-\s*|\s+)old\b/i;
+	if (agePhrase.test(prompt)) {
+		return prompt.replace(agePhrase, (match, article: string | undefined) => {
+			const usesHyphen = match.includes("-");
+			const normalizedAge = usesHyphen ? `${age}-year-old` : `${age} year old`;
+
+			if (!article) return normalizedAge;
+
+			return `${getAgeArticle(
+				age,
+				match.charAt(0) === match.charAt(0).toUpperCase(),
+			)} ${age}-year-old`;
+		});
+	}
+
+	return prompt.replace(/\bage\s*:\s*\d{1,3}\b/i, `age: ${age}`);
+}
+
+function normalizeSceneAge(scene: Scene, age: number | undefined): Scene {
+	return { ...scene, prompt: normalizePromptAge(scene.prompt, age) };
+}
+
+function normalizeScenesAge(scenes: Scene[], age: number | undefined): Scene[] {
+	return scenes.map((scene) => normalizeSceneAge(scene, age));
+}
+
 async function runScenesOnce(
 	character: Character,
 	gatheringSummary: string,
@@ -91,6 +150,8 @@ async function runScenesOnce(
 		"Here is the full gathering conversation summary for the scenes:",
 		"",
 		gatheringSummary,
+		"",
+		buildCanonicalAgeInstruction(character),
 		"",
 		enforcedCount !== undefined
 			? `Now generate exactly ${enforcedCount} scenes as a structured JSON object matching the schema.`
@@ -182,7 +243,11 @@ async function runScenesOnce(
 		};
 	}
 
-	return { ok: true, scenes: parsed.data.scenes, usage };
+	return {
+		ok: true,
+		scenes: normalizeScenesAge(parsed.data.scenes, getCanonicalAge(character)),
+		usage,
+	};
 }
 
 export async function generateScenes(
@@ -343,6 +408,8 @@ async function runSingleSceneOnce(
 		"",
 		gatheringSummary,
 		"",
+		buildCanonicalAgeInstruction(character),
+		"",
 		"Now generate ONE scene as a structured JSON object matching the schema.",
 		"The object MUST have a single `scene` field containing `sceneName` (short descriptive name, distinct from existing scenes), `prompt` (full image prompt) AND `negativePrompt` (8-15 comma-separated tags of things to avoid — supported by ALL image models now).",
 		"Do NOT return an array or multiple scenes — exactly one scene.",
@@ -400,7 +467,11 @@ async function runSingleSceneOnce(
 		};
 	}
 
-	return { ok: true, scene: parsed.data.scene, usage };
+	return {
+		ok: true,
+		scene: normalizeSceneAge(parsed.data.scene, getCanonicalAge(character)),
+		usage,
+	};
 }
 
 export async function generateSingleScene(

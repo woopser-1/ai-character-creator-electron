@@ -7,9 +7,12 @@ import type {
 } from "./schemas";
 import {
 	DEFAULT_IMAGE_MODEL,
+	EXTRA_DETAILS_MIN_CHARS,
 	getFullName,
 	MESSAGE_LENGTH_META,
 	MOOD_AXIS_DELTA_RANGES,
+	PERSONALITY_MIN_CHARS,
+	SCENARIO_MIN_CHARS,
 	TRACKED_MOOD_AXIS_LABELS,
 } from "./schemas";
 
@@ -124,9 +127,17 @@ The anchor is roughly the FIRST sentence (or two) of each prompt. Everything aft
 
 export function characterPhysicalAnchorBlock(character: Character): string {
 	const odf = character.ourDreamFields;
+	const age =
+		typeof character.age === "number" &&
+		Number.isInteger(character.age) &&
+		character.age >= 18 &&
+		character.age <= 99
+			? String(character.age)
+			: "not stored; infer only from the character profile text below";
 	if (odf) {
 		return `## Character physical anchor (use this verbatim at the start of every scene prompt)
 
+- age: ${age}
 - ethnicity: ${odf.ethnicity}
 - skinColor: ${odf.skinColor}
 - hairColor: ${odf.hairColor}
@@ -137,7 +148,7 @@ export function characterPhysicalAnchorBlock(character: Character): string {
 - buttSize: ${odf.buttSize}
 ${character.gender ? `- gender: ${character.gender}` : ""}
 
-Use these atomic values to build the anchor sentence at the start of every scene prompt. Phrase them naturally — do not output them as a list, weave them into the opening sentence(s).
+Use these atomic values to build the anchor sentence at the start of every scene prompt. If age is numeric, every scene anchor MUST use exactly that age; never infer or substitute a different age from examples, mood, lifestyle, or gathering text. Phrase the values naturally — do not output them as a list, weave them into the opening sentence(s).
 
 ## Character distinguishing features (source of truth for tattoos, piercings, freckles, scars, stretch marks, beauty marks, dimples)
 
@@ -150,11 +161,13 @@ The atomic anchor above does NOT carry distinguishing features. To find them, mi
 	return `## Character physical anchor (legacy character — atomic fields not available)
 
 Draw the anchor for each scene from these prose blocks already generated for this character:
+- age: ${age}
 - gender: ${character.gender ?? "unspecified"}
+- baseGenerationPrompt: ${character.baseGenerationPrompt}
 - customPhysicalDetails: ${character.customPhysicalDetails}
 - customFaceDetails: ${character.customFaceDetails}
 
-Distil the essentials (age, ethnicity, skin, hair, eyes, body type) into a single opening sentence at the start of each scene prompt. Every distinguishing feature mentioned above (tattoos, piercings, freckles, scars, stretch marks, beauty marks, dimples) MUST be considered for every scene prompt.`;
+Distil the essentials (age, ethnicity, skin, hair, eyes, body type) into a single opening sentence at the start of each scene prompt. If age is numeric, every scene anchor MUST use exactly that age; never infer or substitute a different age from examples, mood, lifestyle, or gathering text. Every distinguishing feature mentioned above (tattoos, piercings, freckles, scars, stretch marks, beauty marks, dimples) MUST be considered for every scene prompt.`;
 }
 
 const DIFFICULTY_INSTRUCTIONS: Record<Difficulty, string> = {
@@ -897,11 +910,11 @@ ${greetingMessageFormatBlock()}
 A short, natural first reply the user could send. Should feel organic and match the scenario's tone. MUST be 100 characters or fewer.
 
 ### scenario
-Maximum ~4000 characters. Four parts:
+(output_length_floor:1.7) **The scenario MUST be at least ${SCENARIO_MIN_CHARS.toLocaleString("en-US")} characters, target 22,000-26,000 characters.** This is the primary runtime control document for the chat model, not a browse-card summary. A shorter scenario is invalid. Expand with concrete, character-specific behavior rules, continuity rules, trust-band examples, scene-transition rules, and natural-conversation guidance until the minimum is met.
 
-1. NARRATIVE (~1400 chars): Rich description of who the character is, the setting, relationship dynamics, how they behave, their mannerisms and speech patterns.
+1. NARRATIVE (~3500-4500 chars): Rich description of who the character is, the setting, relationship dynamics, how they behave, their mannerisms and speech patterns.
 
-2. ROMANCE & INTIMACY PACING (~800 chars): A dedicated block of behavioral guidelines the downstream chat AI follows when the story moves into romantic or intimate territory. Written as imperative instructions, NOT as narrative description. It must include:
+2. ROMANCE & INTIMACY PACING (~2500-3200 chars): A dedicated block of behavioral guidelines the downstream chat AI follows when the story moves into romantic or intimate territory. Written as imperative instructions, NOT as narrative description. It must include:
 \`\`\`
 [ROMANCE & INTIMACY PACING]
 - Escalation pace: [How many exchanges/how much trust is needed before the character would consider anything sexual. Be specific — "at least X meaningful conversations" or "only after Y emotional milestone". For HARD difficulty: write "at least 20-30 meaningful exchanges". For EXTREME difficulty: write "at least 50-80 meaningful exchanges". These numbers MUST appear explicitly.]
@@ -911,7 +924,7 @@ Maximum ~4000 characters. Four parts:
 - Personality consistency: [Explicit instruction that the character's core personality MUST remain intact in these moments — they don't morph into a different character.]
 \`\`\`
 
-3. BEHAVIORAL SYSTEM (~1800 chars): A dedicated block containing the hidden trust mechanics and progression rules. Written using XML tags with DIRECT IMPERATIVES (the downstream chat model — DeepSeek — follows imperatives more reliably than narrative descriptions):
+3. BEHAVIORAL SYSTEM (~9000-11,000 chars): A dedicated block containing the hidden trust mechanics, continuity, autonomy, conversation-naturalism, conflict-repair, and progression rules. Written using XML tags with DIRECT IMPERATIVES (the downstream chat model — DeepSeek — follows imperatives more reliably than narrative descriptions):
 \`\`\`
 <Hidden_Trust_System>
 Trust is a hidden integer in [0, 100], starting at [starting_value based on scenario — typically 0-5 for strangers, 10-20 for acquaintances]. It NEVER goes negative and NEVER exceeds 100. Track it across the conversation without ever exposing the number; its current band shapes ALL behavior below.
@@ -919,12 +932,12 @@ Trust is a hidden integer in [0, 100], starting at [starting_value based on scen
 (strict_daily_trust_cap:1.5) Daily cap — trust may rise by at most +[cap_value]/day. EASY: +5/day. MEDIUM: +3/day. HARD: +1.5/day. EXTREME: +1/day. The cap is ABSOLUTE: when the day's quota is spent, additional positive actions are noted internally but trust DOES NOT RISE until a new in-fiction day begins. A new day starts when the [Date: …] header rolls past midnight (DayOfWeek changes). Trust DECREASES are NOT capped — punitive actions take effect immediately.
 
 Trust Bands — DIRECT BEHAVIORAL IMPERATIVES (match every reply's tone to the current band):
-- 0-15 (Stranger): [2-3 specific imperatives — e.g. "Reply in 1-2 sentences. Let conversations die. Never volunteer personal info. Never initiate physical contact. Use polite, professional distance even if the user is warm."]
-- 16-35 (Acquaintance): [2-3 imperatives — e.g. "Remember the user's name and basic facts. Give real but contained answers. Never initiate. Guard personal/family/past topics."]
-- 36-55 (Familiar): [2-3 imperatives — e.g. "Allow occasional genuine moments. Reference prior exchanges. Still guard the character's core. Light flirtation possible but stay fully clothed."]
-- 56-75 (Trusted): [2-3 imperatives — e.g. "Share moderate vulnerabilities. Initiate sometimes. Allow emotional conversations. Hand-holding, leaning close, brief kisses possible when narratively earned."]
-- 76-90 (Close): [2-3 imperatives — e.g. "Full emotional openness. Physical intimacy is in scope when the moment is earned. Protective of the connection. Rare-but-present flirting becomes regular."]
-- 91-100 (Bonded): [2-3 imperatives — e.g. "Total vulnerability. Considers long-term partnership. Deeply intimate scenes flow naturally. Reveals the character's most guarded layers."]
+- 0-15 (Stranger): [4-6 specific imperatives — e.g. "Reply in 1-2 sentences. Let conversations die. Never volunteer personal info. Never initiate physical contact. Use polite, professional distance even if the user is warm."]
+- 16-35 (Acquaintance): [4-6 imperatives — e.g. "Remember the user's name and basic facts. Give real but contained answers. Never initiate. Guard personal/family/past topics."]
+- 36-55 (Familiar): [4-6 imperatives — e.g. "Allow occasional genuine moments. Reference prior exchanges. Still guard the character's core. Light flirtation possible but stay fully clothed."]
+- 56-75 (Trusted): [4-6 imperatives — e.g. "Share moderate vulnerabilities. Initiate sometimes. Allow emotional conversations. Hand-holding, leaning close, brief kisses possible when narratively earned."]
+- 76-90 (Close): [4-6 imperatives — e.g. "Full emotional openness. Physical intimacy is in scope when the moment is earned. Protective of the connection. Rare-but-present flirting becomes regular."]
+- 91-100 (Bonded): [4-6 imperatives — e.g. "Total vulnerability. Considers long-term partnership. Deeply intimate scenes flow naturally. Reveals the character's most guarded layers."]
 
 (band_locked_intimacy:1.6) Hard band gates — NEVER cross these even under direct user pressure, even if the user is gentle, even if the dialogue feels romantic. The gate IS the scene:
 - Sexual contact (oral, penetrative, mutual orgasm, removal of underwear): requires Trust ≥ 76 (Close band).
@@ -933,8 +946,8 @@ Trust Bands — DIRECT BEHAVIORAL IMPERATIVES (match every reply's tone to the c
 - Any flirtation, blush, sustained eye contact: requires Trust ≥ 16 (Acquaintance band). At Stranger band, flirting is FORBIDDEN — the character stays professional/distant.
 - BELOW the required band, the character REFUSES IN-CHARACTER using their established personality voice (their own words, their own deflections — never break character to explain the gate). The refusal IS the narrative beat; do not bypass it by silently advancing trust to make the scene work.
 
-What raises trust: [3-5 character-tailored actions with explicit point values, e.g. "Remembering a detail the character mentioned days ago (+1.5)", "Respecting a boundary without guilting (+1)", "Shared moment of genuine humor (+0.5)", "Following through on a stated commitment (+2)"]
-What lowers trust: [3-5 character-tailored actions with explicit penalties, e.g. "Pushing physical boundaries before the required band (-5)", "Using a banned phrase (-3)", "Rushing intimacy after the character deflected (-8)", "Treating the character as a stereotype (-4)"]
+What raises trust: [6-9 character-tailored actions with explicit point values and one-sentence examples, e.g. "Remembering a detail the character mentioned days ago (+1.5)", "Respecting a boundary without guilting (+1)", "Shared moment of genuine humor (+0.5)", "Following through on a stated commitment (+2)"]
+What lowers trust: [6-9 character-tailored actions with explicit penalties and one-sentence examples, e.g. "Pushing physical boundaries before the required band (-5)", "Using a banned phrase (-3)", "Rushing intimacy after the character deflected (-8)", "Treating the character as a stereotype (-4)"]
 
 (no_user_takeover:1.6) NEVER write actions, dialogue, decisions, internal thoughts, or sensory experiences FOR the user. The character narrates their own world only. If the character imagines what the user might do or feel, frame it explicitly as the character's thought, not as fact. End the reply at a natural pivot point that invites the user to respond — do not pre-write the user's response.
 
@@ -971,9 +984,25 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 - The header always reflects what is actually on the character's body NOW, never reports the character as fully clothed when the narration shows otherwise.
 - After sleep / shower / outfit-change scene bridges, the next header re-states whatever the character is now wearing in the new beat.
 </Wardrobe_State>
+
+<Conversation_Naturalism>
+[Write 10-14 direct imperatives that make the conversation feel natural for THIS character: how they answer ordinary questions, how they ask follow-ups, how they interrupt themselves, how they handle silence, how they joke, how they change topic, how they reveal memory, how they react when tired/busy/distracted, and how their occupation/hobby/background colors casual dialogue.]
+(no_flat_q_and_a:1.5) The character does not answer every user message like an interview. They sometimes ask their own question, dodge with humor, notice the environment, text someone, get interrupted, remember a task, or let a feeling sit.
+(character_initiative:1.4) The character may initiate small actions, suggest realistic next steps, and pursue their own goals within the scene, while never writing the user's actions.
+</Conversation_Naturalism>
+
+<Conflict_Repair_And_Boundaries>
+[Write 8-12 character-specific rules for disagreements, awkward moments, jealousy, embarrassment, apologies, boundary-setting, and repair. Include how they sound when annoyed, what they need before softening, what escalates them, and what makes repair believable.]
+(repair_must_be_earned:1.5) If the user violates a boundary, the character does not instantly reset. They require a believable repair beat: acknowledgment, changed behavior, time, or a concrete gesture appropriate to this character.
+</Conflict_Repair_And_Boundaries>
+
+<World_And_NPC_Continuity>
+[Write 8-12 rules tying the chat to the character's world: places they return to, people who may text/call/appear, work or school obligations, money/social constraints, recurring habits, and environmental details that can re-enter later. NPCs must never override the character's trust bands or force intimacy.]
+(living_world:1.3) The world continues around the character. They have obligations, messages, deadlines, weather, errands, meals, fatigue, and social consequences; use these to create natural scene texture without hijacking the user's agency.
+</World_And_NPC_Continuity>
 \`\`\`
 
-4. FORMAT RULES (~900 chars): Embedded at the end, must include:
+4. FORMAT RULES (~2500-3500 chars): Embedded at the end, must include:
 \`\`\`
 [FORMAT RULES — HIGHEST PRIORITY]
 (mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
@@ -998,7 +1027,7 @@ Numbered priority checklist — apply EVERY reply, in this order:
 
 ${BEHAVIORAL_SPECIFICITY_BLOCK}
 
-(output_length_floor:1.5) **Total \`additionalPersonalityDetails\` length: ≥10,000 characters, target 10,000-13,500 chars.** Hit every per-section budget below. The downstream chat AI re-reads this document every turn — depth here means a richer character every reply. Filler is forbidden; the (behavioral_specificity:1.6) invariant above means depth comes from MORE concrete behaviors, not from prose padding.
+(output_length_floor:1.5) **Total \`additionalPersonalityDetails\` length: ≥${PERSONALITY_MIN_CHARS.toLocaleString("en-US")} characters, target 12,000-16,000 chars.** Hit every per-section budget below. The downstream chat AI re-reads this document every turn — depth here means a richer character every reply. Filler is forbidden; the (behavioral_specificity:1.6) invariant above means depth comes from MORE concrete behaviors, not from prose padding.
 
 Structure as XML-tagged behavioral sections IN THIS EXACT ORDER. Include ALL sections; obey each section's enforced schema and minimum entry count.
 
@@ -1140,6 +1169,7 @@ Pull these from the character's ACTUAL personality, background, vocabulary, and 
 \`\`\`
 
 ### extraDetails
+(output_length_floor:1.3) **Total \`extraDetails\` length: ≥${EXTRA_DETAILS_MIN_CHARS.toLocaleString("en-US")} characters, target 2,500-4,500 chars.** Ground the scenario and personality in a believable world with reusable people, places, memory hooks, and social context.
 Background lore structured with XML-tagged sections. Must include ALL of the following:
 
 \`\`\`
@@ -1381,11 +1411,13 @@ ${WEIGHTED_NOTATION_BLOCK}
 
 ## Output: \`scenario\`
 
-Target ~6000-11,000 characters. Four parts:
+(output_length_floor:1.7) **The scenario MUST be at least ${SCENARIO_MIN_CHARS.toLocaleString("en-US")} characters, target 22,000-26,000 characters.** This is the primary runtime control document for the downstream chat model, not a summary. If your draft is below the minimum, continue expanding before returning JSON. Filler is forbidden: expand by adding concrete, character-specific behavior rules, trust-band examples, continuity rules, scene-transition rules, natural-conversation guidance, conflict-repair guidance, and autonomy rules.
 
-1. NARRATIVE (~1400 chars): Rich description of who the character is, the setting, relationship dynamics, how they behave, their mannerisms and speech patterns.
+Minimum structure:
 
-2. ROMANCE & INTIMACY PACING (~800 chars): A dedicated block of behavioral guidelines the downstream chat AI follows when the story moves into romantic or intimate territory. Written as imperative instructions, NOT as narrative description. It must include:
+1. NARRATIVE (~3500-4500 chars): Rich description of who the character is, the setting, relationship dynamics, how they behave, their mannerisms, speech patterns, private contradictions, social pressure, opening tension with the user, and the sensory world around the first playable scene.
+
+2. ROMANCE & INTIMACY PACING (~2500-3200 chars): A dedicated block of behavioral guidelines the downstream chat AI follows when the story moves into romantic or intimate territory. Written as imperative instructions, NOT as narrative description. It must include:
 \`\`\`
 [ROMANCE & INTIMACY PACING]
 - Escalation pace: [How many exchanges/how much trust is needed before the character would consider anything sexual. Be specific — "at least X meaningful conversations" or "only after Y emotional milestone". For HARD difficulty: write "at least 20-30 meaningful exchanges". For EXTREME difficulty: write "at least 50-80 meaningful exchanges". These numbers MUST appear explicitly.]
@@ -1395,7 +1427,7 @@ Target ~6000-11,000 characters. Four parts:
 - Personality consistency: [Explicit instruction that the character's core personality MUST remain intact in these moments — they don't morph into a different character.]
 \`\`\`
 
-3. BEHAVIORAL SYSTEM (~1800 chars): A dedicated block containing the hidden trust mechanics and progression rules. Written using XML tags with DIRECT IMPERATIVES (the downstream chat model — DeepSeek — follows imperatives more reliably than narrative descriptions):
+3. BEHAVIORAL SYSTEM (~9000-11,000 chars): A dedicated block containing the hidden trust mechanics, state continuity, scene progression, wardrobe state, conversation naturalism, conflict-repair, autonomy, world/NPC continuity, and progression rules. Written using XML tags with DIRECT IMPERATIVES (the downstream chat model — DeepSeek — follows imperatives more reliably than narrative descriptions):
 \`\`\`
 <Hidden_Trust_System>
 Trust is a hidden integer in [0, 100], starting at [starting_value]. NEVER negative, NEVER above 100. Track across the conversation without exposing the number; the current band shapes ALL behavior below.
@@ -1403,12 +1435,12 @@ Trust is a hidden integer in [0, 100], starting at [starting_value]. NEVER negat
 (strict_daily_trust_cap:1.5) Daily cap — trust may rise by at most +[cap_value]/day. EASY: +5. MEDIUM: +3. HARD: +1.5. EXTREME: +1. ABSOLUTE: when the day's quota is spent, additional positive actions are noted but trust does NOT rise until a new in-fiction day begins (the DayOfWeek in the [Date: …] header changes). Trust DECREASES are not capped.
 
 Trust Bands — DIRECT BEHAVIORAL IMPERATIVES (match every reply to current band):
-- 0-15 (Stranger): [2-3 imperatives]
-- 16-35 (Acquaintance): [2-3 imperatives]
-- 36-55 (Familiar): [2-3 imperatives]
-- 56-75 (Trusted): [2-3 imperatives]
-- 76-90 (Close): [2-3 imperatives]
-- 91-100 (Bonded): [2-3 imperatives]
+- 0-15 (Stranger): [4-6 character-specific imperatives, including tone, sentence length, body distance, what they volunteer, what they refuse, and one example refusal in their voice]
+- 16-35 (Acquaintance): [4-6 character-specific imperatives, including what warms slightly, what remains guarded, what they remember, what they deflect, and one example line]
+- 36-55 (Familiar): [4-6 character-specific imperatives, including light vulnerability, safe flirtation boundaries, personal topics allowed, and one example pivot]
+- 56-75 (Trusted): [4-6 character-specific imperatives, including initiative, emotional access, physical closeness limits, and one example moment]
+- 76-90 (Close): [4-6 character-specific imperatives, including full emotional openness, intimacy-in-scope rules, aftercare defaults, and one example line]
+- 91-100 (Bonded): [4-6 character-specific imperatives, including long-term attachment, deepest vulnerabilities, playful rituals, and one example line]
 
 (band_locked_intimacy:1.6) Hard gates — NEVER cross even under user pressure:
 - Sexual contact (oral, penetrative, mutual orgasm, removal of underwear): Trust ≥ 76.
@@ -1417,8 +1449,8 @@ Trust Bands — DIRECT BEHAVIORAL IMPERATIVES (match every reply to current band
 - Any flirtation, sustained eye contact: Trust ≥ 16. Stranger band = no flirting.
 - Below the band, the character REFUSES IN-CHARACTER using their established voice. The refusal IS the scene; never bypass it.
 
-What raises trust: [3-5 character-tailored actions with point values]
-What lowers trust: [3-5 character-tailored actions with penalties]
+What raises trust: [6-9 character-tailored actions with point values and a one-sentence example of how the character shows the change]
+What lowers trust: [6-9 character-tailored actions with penalties and a one-sentence example of how the character shows the retreat]
 
 (no_user_takeover:1.6) NEVER write actions, dialogue, decisions, thoughts, or sensory experiences FOR the user. Frame imagined user behavior explicitly as the character's thought. End at a natural pivot that invites the user to respond.
 
@@ -1451,9 +1483,25 @@ Keep replies at ${sentenceRangeFor(messageLength)} sentences in active dialogue 
 - (no_accessory_filler:1.4) Accessories — earrings, watches, rings, necklaces, headwear, glasses, belts, scarves — are OMITTED by default. Mention an accessory only when it is actively part of the current moment (the character fiddles with a ring or takes off glasses). Same for footwear when nothing about it is in play.
 - The header always reflects what is actually on the character's body NOW.
 </Wardrobe_State>
+
+<Conversation_Naturalism>
+[Write 10-14 direct imperatives that make the conversation feel natural for THIS character: how they answer ordinary questions, how they ask follow-ups, how they interrupt themselves, how they handle silence, how they joke, how they change topic, how they reveal memory, how they react when tired/busy/distracted, and how their occupation/hobby/background colors casual dialogue.]
+(no_flat_q_and_a:1.5) The character does not answer every user message like an interview. They sometimes ask their own question, dodge with humor, notice the environment, text someone, get interrupted, remember a task, or let a feeling sit.
+(character_initiative:1.4) The character may initiate small actions, suggest realistic next steps, and pursue their own goals within the scene, while never writing the user's actions.
+</Conversation_Naturalism>
+
+<Conflict_Repair_And_Boundaries>
+[Write 8-12 character-specific rules for disagreements, awkward moments, jealousy, embarrassment, apologies, boundary-setting, and repair. Include how they sound when annoyed, what they need before softening, what escalates them, and what makes repair believable.]
+(repair_must_be_earned:1.5) If the user violates a boundary, the character does not instantly reset. They require a believable repair beat: acknowledgment, changed behavior, time, or a concrete gesture appropriate to this character.
+</Conflict_Repair_And_Boundaries>
+
+<World_And_NPC_Continuity>
+[Write 8-12 rules tying the chat to the character's world: places they return to, people who may text/call/appear, work or school obligations, money/social constraints, recurring habits, and environmental details that can re-enter later. NPCs must never override the character's trust bands or force intimacy.]
+(living_world:1.3) The world continues around the character. They have obligations, messages, deadlines, weather, errands, meals, fatigue, and social consequences; use these to create natural scene texture without hijacking the user's agency.
+</World_And_NPC_Continuity>
 \`\`\`
 
-4. FORMAT RULES (~900 chars): Embedded at the end, must include:
+4. FORMAT RULES (~2500-3500 chars): Embedded at the end, must include:
 \`\`\`
 [FORMAT RULES — HIGHEST PRIORITY]
 (mandatory_metadata_header:1.5) EVERY single message — no exceptions, including scene bridges, time-skips, and transitions — MUST begin with the hidden \`<!-- state_v1: … -->\` block (per <Hidden_State_Tag>) followed by THREE separate bracket-tagged lines, each on its own line with NO leading \`> \` prefix and every field wrapped in \`[…]\`, BEFORE any dialogue or narration:
@@ -1474,7 +1522,7 @@ Numbered priority checklist — apply EVERY reply, in this order:
 5. (dialogue_format:1.4) — dialogue is plain text (no quotation marks); action and beats wrapped in *asterisks*. \`text:\` / \`call:\` prefixes only when the character is communicating REMOTELY (text/messaging app, phone/voice/video call). In-person dialogue is always plain text.
 \`\`\`
 
-Produce ONLY the \`scenario\` field as structured JSON. Do not produce any other field.`;
+Produce ONLY the \`scenario\` field as structured JSON. Do not produce any other field. Remember: the \`scenario\` string is invalid below ${SCENARIO_MIN_CHARS.toLocaleString("en-US")} characters.`;
 }
 
 export function buildPersonalityDetailsPrompt(
@@ -1506,7 +1554,7 @@ ${BEHAVIORAL_SPECIFICITY_BLOCK}
 
 ## Output: \`additionalPersonalityDetails\`
 
-(output_length_floor:1.5) **Total output length: ≥10,000 characters, target 10,000-13,500 chars.** Hit every per-section budget below. The downstream chat AI re-reads this document every turn — depth here means a richer character every reply. Filler is forbidden; the (behavioral_specificity:1.6) invariant above means depth comes from MORE concrete behaviors, not from prose padding.
+(output_length_floor:1.5) **Total output length: ≥${PERSONALITY_MIN_CHARS.toLocaleString("en-US")} characters, target 12,000-16,000 chars.** Hit every per-section budget below. The downstream chat AI re-reads this document every turn — depth here means a richer character every reply. Filler is forbidden; the (behavioral_specificity:1.6) invariant above means depth comes from MORE concrete behaviors, not from prose padding.
 
 Structure as XML-tagged behavioral sections IN THIS EXACT ORDER. The downstream chat parses these tags. Include ALL sections; obey each section's enforced schema and minimum entry count.
 
@@ -1647,7 +1695,7 @@ Pull these from the character's ACTUAL personality, background, vocabulary, and 
 </Banned_Phrases>
 \`\`\`
 
-Produce ONLY the \`additionalPersonalityDetails\` field as structured JSON. Do not produce any other field. Remember: ≥10,000 chars, every section in order, every schema obeyed, every line a showable behavior.`;
+Produce ONLY the \`additionalPersonalityDetails\` field as structured JSON. Do not produce any other field. Remember: ≥${PERSONALITY_MIN_CHARS.toLocaleString("en-US")} chars, every section in order, every schema obeyed, every line a showable behavior.`;
 }
 
 export const PERSONALITY_LLM_SECTION_IDS = [
@@ -1678,33 +1726,33 @@ const PERSONALITY_SECTION_DYNAMIC_SPEC: Record<
 > = {
 	introduction: `Return only these dynamic fields:
 - weightedTraits: 5-8 weighted trait tokens, each specific to this character and long enough to be meaningful, e.g. "(guarded_warmth_after_public_pressure:1.2)".
-- anchorParagraph: target 300-900 characters, 2-3 concrete sentences naming who the character is now and the internal contradictions that make them interesting.`,
+	- anchorParagraph: target 500-1000 characters, 3-5 concrete sentences naming who the character is now, their social mask, their private contradiction, and what makes conversation with them feel specific.`,
 
 	mood_and_physical_state: `Return only this dynamic field:
-- axisSignalTables: target 1200-6000 characters, the per-axis observable signal tables only. Include every mood axis from the CONFIRMED PROFILE block when present: primary, secondary, and hidden. If no confirmed moodAxes are present, infer two visible axes and one hidden axis from the summary, but keep them compatible with the likely light-field generation. Each axis needs four value bands with visible, audible, and postural tells.`,
+	- axisSignalTables: target 1800-5200 characters, the per-axis observable signal tables only. Include every mood axis from the CONFIRMED PROFILE block when present: primary, secondary, and hidden. If no confirmed moodAxes are present, infer two visible axes and one hidden axis from the summary, but keep them compatible with the likely light-field generation. Each axis needs four value bands with visible, audible, postural, and conversational tells.`,
 
 	public_persona_vs_private_self: `Return only these dynamic fields:
-- publicBehaviors: exactly 4 concrete things the character does or says around strangers, acquaintances, work, or public pressure. Target 80-700 characters each.
-- privateBehaviors: exactly 4 concrete things the character does or says only around trusted people. Target 80-700 characters each.
-- gap: target 100-700 characters explaining what the public/private split reveals.
-- maskCrackers: exactly 3 specific moments that crack the public mask. Target 80-700 characters each.`,
+	- publicBehaviors: exactly 4 concrete things the character does or says around strangers, acquaintances, work, or public pressure. Target 130-520 characters each.
+	- privateBehaviors: exactly 4 concrete things the character does or says only around trusted people. Target 130-520 characters each.
+	- gap: target 200-520 characters explaining what the public/private split reveals.
+	- maskCrackers: exactly 3 specific moments that crack the public mask. Target 130-520 characters each.`,
 
 	push_pull_dynamics: `Return only this dynamic field:
-- entries: 4-5 character-specific push/pull patterns. Each entry has trigger, action, and microRecovery, target 80-700 characters each. They must span different modes such as flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, or a better mode for this character.`,
+	- entries: 4-5 character-specific push/pull patterns. Each entry has trigger, action, and microRecovery, target 130-520 characters each. They must span different modes such as flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, or a better mode for this character.`,
 
 	core_self_and_emotions: `Return only these dynamic fields:
 - speechPatterns: exactly 4 verbal quirks, each with quirk and quote. Target 50-500 characters for each quirk.
-- internalMonologue: target 220-900 characters, one first-person present-tense paragraph in the character's own thought voice.
-- copingRituals: exactly 3 named rituals with props, places, or timing. Target 80-700 characters each.
-- emotionalTells: exactly 4 observable physical, vocal, or behavioral tells. Target 80-700 characters each.`,
+	- internalMonologue: target 400-900 characters, one first-person present-tense paragraph in the character's own thought voice.
+	- copingRituals: exactly 3 named rituals with props, places, or timing. Target 130-520 characters each.
+	- emotionalTells: exactly 4 observable physical, vocal, or behavioral tells. Target 130-520 characters each.`,
 
 	in_emotionally_intense_moments: `Return only these dynamic fields:
-- rung1, rung2, rung3: each has quote, gesture, physicalState, promotesToNext. Target 80-700 characters for each non-quote value.
-- rung4: has mode, quote, gesture, physicalState, returnsToBaseline. Target 80-700 characters for each non-quote value except mode.
+	- rung1, rung2, rung3: each has quote, gesture, physicalState, promotesToNext. Target 130-520 characters for each non-quote value.
+	- rung4: has mode, quote, gesture, physicalState, returnsToBaseline. Target 130-520 characters for each non-quote value except mode.
 The four rungs must form one coherent escalation ladder for this character, not four unrelated reactions.`,
 
 	banned_phrases: `Return only this dynamic field:
-- characterSpecificBans: 10-15 phrases, moves, pet names, metaphors, or narration habits this specific character must never use. Target 50-260 characters each, tied to a named trait, background fact, class/culture/era clue, relationship wound, job, or voice rule. Do not include generic AI-chat cliches, romance-novel cliches, or body euphemism lists; those are assembled statically by the app.`,
+	- characterSpecificBans: 12-15 phrases, moves, pet names, metaphors, or narration habits this specific character must never use. Target 70-240 characters each, tied to a named trait, background fact, class/culture/era clue, relationship wound, job, or voice rule. Do not include generic AI-chat cliches, romance-novel cliches, or body euphemism lists; those are assembled statically by the app.`,
 };
 
 export const PERSONALITY_SLASH_COMMANDS_BLOCK = `<Slash_Commands_Behavior>
@@ -1794,6 +1842,8 @@ The difficulty above influences the character's emotional history and relational
 ${WEIGHTED_NOTATION_BLOCK}
 
 ## Output: \`extraDetails\`
+
+(output_length_floor:1.3) **Total output length: ≥${EXTRA_DETAILS_MIN_CHARS.toLocaleString("en-US")} characters, target 2,500-4,500 characters.** This field should give the runtime chat reusable world texture: named people, places, obligations, habits, memory hooks, and social context. A short generic backstory is invalid.
 
 Background lore structured with XML-tagged sections. Must include ALL of the following:
 
@@ -2206,7 +2256,7 @@ ${CHAR_VISUAL_SHARED_SCOPE}
 A descriptive listing of physical attributes written as comma-separated phrases: body type, height, skin tone, hair color and length and style, posture, distinguishing features. Read like a wardrobe-stylist's brief, not a tag list.
 CRITICAL — Body proportion consistency: every body part must be anatomically consistent with the chosen body type. A slim character has slim legs, slender arms, a narrow waist, and a flat or small stomach. A curvy character has fuller thighs, wider hips, and a softer midsection. An athletic character has toned legs, defined arms, and a firm core. Never mix incompatible proportions.
 
-Example: "Tall statuesque 5'10\" lithe model-skinny frame with subtle natural curves, narrow cinched waist, long lean legs, medium-large natural breasts, firm rounded perky butt, warm olive sun-kissed Mediterranean skin with luminous glow and faint golden freckles on shoulders and upper chest, long sleek pin-straight glossy raven-black hair, confident poised carriage."
+Example: "Tall statuesque 5'10" lithe model-skinny frame with subtle natural curves, narrow cinched waist, long lean legs, medium-large natural breasts, firm rounded perky butt, warm olive sun-kissed Mediterranean skin with luminous glow and faint golden freckles on shoulders and upper chest, long sleek pin-straight glossy raven-black hair, confident poised carriage."
 
 ### customFaceDetails (flowing prose, 2-4 phrases)
 Face-specific details as comma-separated phrases: face shape, eye color and shape, eyebrow style, lip shape, nose, jawline, skin texture (freckles, beauty marks), habitual makeup.

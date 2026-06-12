@@ -239,13 +239,16 @@ const STEP_DEFS: {
 const REFUSAL_PATTERN =
 	/\b(I (can('?| no)t|am unable|won'?t)|I (must|have to) (decline|refuse)|I'm not (able|going to|comfortable)|content (policy|guidelines)|inappropriate|out[- ]of[- ]character|doesn'?t (fit|match|align) (with )?(the|this) (character|personality)|inconsistent with|not (consistent|aligned) with|hors[- ]caract|ne (correspond|colle) pas (au|\u00e0)|incoh[\u00e9e]rent|d[\u00e9e]sol[\u00e9e], je)/i;
 
-interface StringTooBigIssue {
+type StringLengthDirection = "expand" | "shrink";
+
+interface StringLengthIssue {
+	direction: StringLengthDirection;
 	path: Array<string | number>;
-	maximum: number;
+	boundary: number;
 	currentLength: number;
 	targetLength: number;
-	reductionChars: number;
-	reductionPercent: number;
+	deltaChars: number;
+	deltaPercent: number;
 }
 
 function readPathValue(
@@ -268,65 +271,104 @@ function formatIssuePath(path: ReadonlyArray<string | number>): string {
 		.join("");
 }
 
-function collectStringTooBigIssues(
+function collectStringLengthIssues(
 	error: z.ZodError<unknown>,
 	output: unknown,
-): StringTooBigIssue[] {
-	return error.issues.flatMap((issue) => {
+): StringLengthIssue[] {
+	const issues: StringLengthIssue[] = [];
+
+	for (const issue of error.issues) {
 		const details = issue as z.ZodIssue & {
 			maximum?: unknown;
+			minimum?: unknown;
 			origin?: unknown;
 			path: Array<string | number>;
 		};
-		if (
-			details.code !== "too_big" ||
-			details.origin !== "string" ||
-			typeof details.maximum !== "number"
-		) {
-			return [];
+		if (details.origin !== "string") {
+			continue;
 		}
 
 		const value = readPathValue(output, details.path);
-		if (typeof value !== "string") return [];
+		if (typeof value !== "string") continue;
 
-		const targetLength = Math.max(1, Math.floor(details.maximum * 0.92));
-		const reductionChars = Math.max(1, value.length - targetLength);
-		const reductionPercent = Math.max(
-			1,
-			Math.ceil((reductionChars / value.length) * 100),
-		);
+		if (details.code === "too_big" && typeof details.maximum === "number") {
+			const targetLength = Math.max(1, Math.floor(details.maximum * 0.92));
+			const deltaChars = Math.max(1, value.length - targetLength);
+			const deltaPercent = Math.max(
+				1,
+				Math.ceil((deltaChars / Math.max(1, value.length)) * 100),
+			);
 
-		return [
-			{
+			issues.push({
+				direction: "shrink",
 				path: details.path,
-				maximum: details.maximum,
+				boundary: details.maximum,
 				currentLength: value.length,
 				targetLength,
-				reductionChars,
-				reductionPercent,
-			},
-		];
-	});
+				deltaChars,
+				deltaPercent,
+			});
+
+			continue;
+		}
+
+		if (details.code === "too_small" && typeof details.minimum === "number") {
+			const targetLength = Math.ceil(details.minimum * 1.08);
+			const deltaChars = Math.max(1, targetLength - value.length);
+			const deltaPercent = Math.max(
+				1,
+				Math.ceil((deltaChars / Math.max(1, value.length)) * 100),
+			);
+
+			issues.push({
+				direction: "expand",
+				path: details.path,
+				boundary: details.minimum,
+				currentLength: value.length,
+				targetLength,
+				deltaChars,
+				deltaPercent,
+			});
+		}
+	}
+
+	return issues;
 }
 
 function buildLengthRepairUserMessage(
 	originalUserMessage: string,
 	previousOutput: unknown,
-	issues: ReadonlyArray<StringTooBigIssue>,
+	issues: ReadonlyArray<StringLengthIssue>,
 ): string {
 	const targets = issues
-		.map(
-			(issue) =>
-				`- ${formatIssuePath(issue.path)}: currently ${issue.currentLength} characters, hard maximum ${issue.maximum}, target <= ${issue.targetLength}. Reduce by about ${issue.reductionChars} characters (${issue.reductionPercent}%).`,
-		)
+		.map((issue) => {
+			const path = formatIssuePath(issue.path);
+			if (issue.direction === "shrink") {
+				return `- ${path}: currently ${issue.currentLength} characters, hard maximum ${issue.boundary}, target <= ${issue.targetLength}. Reduce by about ${issue.deltaChars} characters (${issue.deltaPercent}%).`;
+			}
+
+			return `- ${path}: currently ${issue.currentLength} characters, hard minimum ${issue.boundary}, target >= ${issue.targetLength}. Expand by about ${issue.deltaChars} characters (${issue.deltaPercent}%).`;
+		})
+		.join("\n");
+	const needsExpansion = issues.some((issue) => issue.direction === "expand");
+	const needsReduction = issues.some((issue) => issue.direction === "shrink");
+	const actionGuidance = [
+		needsReduction
+			? "For fields that are too long, shorten ONLY the listed fields by roughly the requested amount. Do not halve the content unless the requested percentage requires it. Prefer removing repetition, filler, duplicate examples, and over-explained clauses."
+			: "",
+		needsExpansion
+			? "For fields that are too short, expand ONLY the listed fields by roughly the requested amount. Add concrete character-specific behavior rules, trust-band examples, continuity details, scene-transition rules, conflict-repair guidance, natural conversation cues, and reusable world details. Do not pad with generic filler."
+			: "",
+	]
+		.filter(Boolean)
 		.join("\n");
 
 	return [
-		"The previous structured JSON output has the right shape, but one or more string fields are too long for validation.",
+		"The previous structured JSON output has the right shape, but one or more string fields have invalid length for validation.",
 		"Revise the previous JSON output. Keep the same top-level fields and preserve the important meaning, behavioral rules, names, formatting requirements, XML tags, and examples.",
-		"Shorten ONLY the listed fields by roughly the requested amount. Do not halve the content unless the requested percentage requires it. Prefer removing repetition, filler, duplicate examples, and over-explained clauses.",
+		actionGuidance,
 		"",
-		"Length reduction targets:",
+		"Length repair targets:",
 		targets,
 		"",
 		"Original source context:",
@@ -549,13 +591,13 @@ const PERSONALITY_SECTION_TAGS: Record<PersonalityLlmSectionId, string> = {
 };
 
 const PERSONALITY_SECTION_MIN_CHARS: Record<PersonalityLlmSectionId, number> = {
-	introduction: 380,
-	mood_and_physical_state: 900,
-	public_persona_vs_private_self: 800,
-	push_pull_dynamics: 900,
-	core_self_and_emotions: 900,
-	in_emotionally_intense_moments: 900,
-	banned_phrases: 900,
+	introduction: 700,
+	mood_and_physical_state: 1800,
+	public_persona_vs_private_self: 1600,
+	push_pull_dynamics: 1600,
+	core_self_and_emotions: 1800,
+	in_emotionally_intense_moments: 1800,
+	banned_phrases: 1400,
 };
 
 const personalityCompactText = z.string().min(50);
@@ -573,15 +615,15 @@ const personalitySectionSchemas = {
 			),
 		anchorParagraph: z
 			.string()
-			.min(300)
+			.min(500)
 			.describe(
-				"Two to three concrete sentences naming who the character is and their internal contradictions.",
+				"Three to five concrete sentences naming who the character is and their internal contradictions.",
 			),
 	}),
 	mood_and_physical_state: z.object({
 		axisSignalTables: z
 			.string()
-			.min(1200)
+			.min(1800)
 			.describe(
 				"Only the per-axis signal tables. Include every visible and hidden mood axis from the confirmed profile block when present.",
 			),
@@ -589,7 +631,7 @@ const personalitySectionSchemas = {
 	public_persona_vs_private_self: z.object({
 		publicBehaviors: z.array(personalityDenseText).min(4).max(4),
 		privateBehaviors: z.array(personalityDenseText).min(4).max(4),
-		gap: z.string().min(100),
+		gap: z.string().min(200),
 		maskCrackers: z.array(personalityDenseText).min(3).max(3),
 	}),
 	push_pull_dynamics: z.object({
@@ -614,7 +656,7 @@ const personalitySectionSchemas = {
 			)
 			.min(4)
 			.max(4),
-		internalMonologue: z.string().min(220),
+		internalMonologue: z.string().min(400),
 		copingRituals: z.array(personalityDenseText).min(3).max(3),
 		emotionalTells: z.array(personalityDenseText).min(4).max(4),
 	}),
@@ -648,7 +690,7 @@ const personalitySectionSchemas = {
 	banned_phrases: z.object({
 		characterSpecificBans: z
 			.array(z.string().min(50))
-			.min(10)
+			.min(12)
 			.max(15)
 			.describe(
 				"Only character-specific banned phrases, each tied to a named trait, background fact, voice rule, or relationship wound.",
@@ -947,11 +989,11 @@ async function runStepOnce<T>(
 
 	const parsed = def.schema.safeParse(result.structuredOutput);
 	if (!parsed.success) {
-		const tooBigIssues = collectStringTooBigIssues(
+		const lengthIssues = collectStringLengthIssues(
 			parsed.error,
 			result.structuredOutput,
 		);
-		if (tooBigIssues.length > 0) {
+		if (lengthIssues.length > 0) {
 			const repairStepLabel = `${def.label}:length-repair`;
 			const repairStartedAt = Date.now();
 			let repairResult: ModelRunResult;
@@ -962,12 +1004,12 @@ async function runStepOnce<T>(
 					systemPrompt: [
 						systemPrompt,
 						"## Length Repair Mode",
-						"You are revising your own previous structured JSON output because one or more string fields were too long. Preserve schema shape exactly. Shorten only the fields named in the user message by roughly the requested percentage.",
+						"You are revising your own previous structured JSON output because one or more string fields were too short or too long. Preserve schema shape exactly. Change only the fields named in the user message by roughly the requested amount.",
 					].join("\n\n"),
 					userMessage: buildLengthRepairUserMessage(
 						userMessage,
 						result.structuredOutput,
-						tooBigIssues,
+						lengthIssues,
 					),
 					jsonSchema,
 					stepLabel: repairStepLabel,
@@ -1007,7 +1049,7 @@ async function runStepOnce<T>(
 
 				return {
 					ok: false,
-					error: `[${repairStepLabel}] schema validation failed after reducing oversized fields: ${repairParsed.error.message}`,
+					error: `[${repairStepLabel}] schema validation failed after length repair: ${repairParsed.error.message}`,
 					refusal: false,
 					usage: combinedUsage,
 				};

@@ -224,6 +224,8 @@ const api = {
 			imageModel?: ImageModel,
 		): Promise<CharacterResult> =>
 			ipcRenderer.invoke("characters:regenerateScenes", { id, imageModel }),
+		upgradeScenes: (id: string): Promise<CharacterResult> =>
+			ipcRenderer.invoke("characters:upgradeScenes", { id }),
 		regenerateVisualOnly: (payload: {
 			id: string;
 			gatheringSummary: string;
@@ -559,13 +561,11 @@ const api = {
 		},
 	},
 	userPersonas: {
-		list: (): Promise<UserPersona[]> => ipcRenderer.invoke("user-personas:list"),
+		list: (): Promise<UserPersona[]> =>
+			ipcRenderer.invoke("user-personas:list"),
 		create: (input: UserPersonaInput): Promise<UserPersonaResult> =>
 			ipcRenderer.invoke("user-personas:create", input),
-		update: (
-			id: string,
-			input: UserPersonaInput,
-		): Promise<UserPersonaResult> =>
+		update: (id: string, input: UserPersonaInput): Promise<UserPersonaResult> =>
 			ipcRenderer.invoke("user-personas:update", { id, input }),
 		delete: (id: string): Promise<{ success: true }> =>
 			ipcRenderer.invoke("user-personas:delete", id),

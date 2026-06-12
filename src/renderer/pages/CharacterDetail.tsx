@@ -41,10 +41,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-	type ReplaySeed,
-	setReplaySeed,
-} from "@/lib/gathering-replay";
+import { type ReplaySeed, setReplaySeed } from "@/lib/gathering-replay";
 import { navigate } from "@/lib/router";
 import { getStoredImageModel, type StoredCharacter } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,6 +113,11 @@ export function CharacterDetailPage({ id }: { id: string }) {
 	const [refreshVisualsError, setRefreshVisualsError] = useState<string | null>(
 		null,
 	);
+	const [upgradeScenesOpen, setUpgradeScenesOpen] = useState(false);
+	const [upgradeScenesBusy, setUpgradeScenesBusy] = useState(false);
+	const [upgradeScenesError, setUpgradeScenesError] = useState<string | null>(
+		null,
+	);
 	const toast = useToast();
 
 	useEffect(() => {
@@ -164,7 +166,8 @@ export function CharacterDetailPage({ id }: { id: string }) {
 	// ⌘E to export
 	useEffect(() => {
 		const handler = (event: KeyboardEvent) => {
-			const cmdE = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e";
+			const cmdE =
+				(event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e";
 			if (cmdE && !exportBusy && data) {
 				event.preventDefault();
 				void handleExport();
@@ -301,6 +304,25 @@ export function CharacterDetailPage({ id }: { id: string }) {
 		}
 	}, [data, toast]);
 
+	const handleUpgradeScenes = useCallback(async () => {
+		if (!data) return;
+		setUpgradeScenesBusy(true);
+		setUpgradeScenesError(null);
+		const res = await window.api.characters.upgradeScenes(data.id);
+		setUpgradeScenesBusy(false);
+		if (res.success) {
+			setData(res.stored);
+			setUpgradeScenesOpen(false);
+			toast.push({
+				tone: "success",
+				title: "Scenes upgraded",
+				description: `${res.stored.scenes.length} scene prompts now use the latest ${getStoredImageModel(res.stored)} scene format.`,
+			});
+		} else {
+			setUpgradeScenesError(res.error);
+		}
+	}, [data, toast]);
+
 	if (notFound) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6">
@@ -353,11 +375,16 @@ export function CharacterDetailPage({ id }: { id: string }) {
 			}}
 			onRegenerate={() => setRegenerateOpen(true)}
 			onRegenerateMoodAxes={() => void handleRegenerateMoodAxes()}
+			onUpgradeScenes={() => {
+				setUpgradeScenesError(null);
+				setUpgradeScenesOpen(true);
+			}}
 			onUpgradeFramework={() => {
 				setUpgradeError(null);
 				setUpgradeOpen(true);
 			}}
 			refreshVisualsBusy={refreshVisualsBusy}
+			upgradeScenesBusy={upgradeScenesBusy}
 			upgradeBusy={upgradeBusy}
 		/>
 	);
@@ -527,6 +554,57 @@ export function CharacterDetailPage({ id }: { id: string }) {
 				</DialogContent>
 			</Dialog>
 
+			<Dialog
+				onOpenChange={(o) => {
+					if (upgradeScenesBusy) return;
+					setUpgradeScenesOpen(o);
+					if (!o) setUpgradeScenesError(null);
+				}}
+				open={upgradeScenesOpen}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<span className="eyebrow text-primary/85">Scene upgrade</span>
+						<DialogTitle className="-tracking-[0.015em] font-semibold text-[1.25rem] text-foreground leading-tight">
+							Upgrade all {data.scenes.length} scene prompts?
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription className="max-w-[52ch] text-[0.875rem] text-muted-foreground leading-relaxed">
+						This rewrites every existing scene prompt to the latest{" "}
+						{getStoredImageModel(data)} scene framework while preserving the
+						scene names, order, and core concepts. It refreshes positive
+						prompts, negative prompts, the physical anchor, and the stored age
+						lock. Character identity, framework, appearance fields, and
+						gathering history stay untouched.
+					</DialogDescription>
+					{upgradeScenesError && (
+						<div className="rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs ring-1 ring-destructive/30">
+							{upgradeScenesError}
+						</div>
+					)}
+					<DialogFooter>
+						<Button
+							disabled={upgradeScenesBusy}
+							onClick={() => setUpgradeScenesOpen(false)}
+							variant="outline"
+						>
+							Cancel
+						</Button>
+						<Button
+							disabled={upgradeScenesBusy || data.scenes.length === 0}
+							onClick={() => void handleUpgradeScenes()}
+						>
+							{upgradeScenesBusy ? (
+								<Loader2 className="h-3.5 w-3.5 animate-spin" />
+							) : (
+								<Sparkles className="h-3.5 w-3.5" />
+							)}
+							{upgradeScenesBusy ? "Upgrading…" : "Upgrade scenes"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			<Dialog onOpenChange={setDeleteOpen} open={deleteOpen}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
@@ -573,7 +651,9 @@ function TopUtilityBar({ data }: { data: StoredCharacter }) {
 									href={ourdreamChatUrl(data.ourdreamUrl)}
 									rel="noreferrer noopener"
 									target="_blank"
-								/>
+								>
+									<span className="sr-only">Open OurDream chat</span>
+								</a>
 							}
 						>
 							<Button
@@ -594,7 +674,9 @@ function TopUtilityBar({ data }: { data: StoredCharacter }) {
 									href={data.ourdreamUrl}
 									rel="noreferrer noopener"
 									target="_blank"
-								/>
+								>
+									<span className="sr-only">Open OurDream profile</span>
+								</a>
 							}
 						>
 							<Button
@@ -627,8 +709,10 @@ function ActionToolbar({
 	onRefreshVivid3Physical,
 	onRegenerate,
 	onRegenerateMoodAxes,
+	onUpgradeScenes,
 	onUpgradeFramework,
 	refreshVisualsBusy,
+	upgradeScenesBusy,
 	upgradeBusy,
 }: {
 	data: StoredCharacter;
@@ -644,8 +728,10 @@ function ActionToolbar({
 	onRefreshVivid3Physical: () => void;
 	onRegenerate: () => void;
 	onRegenerateMoodAxes: () => void;
+	onUpgradeScenes: () => void;
 	onUpgradeFramework: () => void;
 	refreshVisualsBusy: boolean;
+	upgradeScenesBusy: boolean;
 	upgradeBusy: boolean;
 }) {
 	const isVivid3 = getStoredImageModel(data) === "Vivid 3";
@@ -711,9 +797,7 @@ function ActionToolbar({
 								<MenuItem
 									icon={<LinkIcon className="h-3.5 w-3.5" />}
 									label={
-										data.ourdreamUrl
-											? "Edit OurDream link"
-											: "Link to OurDream"
+										data.ourdreamUrl ? "Edit OurDream link" : "Link to OurDream"
 									}
 									onClick={() => {
 										onMoreOpenChange(false);
@@ -754,13 +838,26 @@ function ActionToolbar({
 										}}
 									/>
 								)}
+								<MenuItem
+									disabled={upgradeScenesBusy || data.scenes.length === 0}
+									icon={
+										upgradeScenesBusy ? (
+											<Loader2 className="h-3.5 w-3.5 animate-spin" />
+										) : (
+											<Sparkles className="h-3.5 w-3.5" />
+										)
+									}
+									label={upgradeScenesBusy ? "Upgrading…" : "Upgrade scenes"}
+									onClick={() => {
+										onMoreOpenChange(false);
+										onUpgradeScenes();
+									}}
+								/>
 								{!data.character.moodAxes && (
 									<MenuItem
 										disabled={moodAxesBusy}
 										icon={<Gauge className="h-3.5 w-3.5" />}
-										label={
-											moodAxesBusy ? "Generating…" : "Generate mood axes"
-										}
+										label={moodAxesBusy ? "Generating…" : "Generate mood axes"}
 										onClick={() => {
 											onMoreOpenChange(false);
 											onRegenerateMoodAxes();

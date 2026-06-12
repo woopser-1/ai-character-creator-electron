@@ -30,6 +30,10 @@ export const MESSAGE_LENGTH_META: Record<
 
 export const DEFAULT_MESSAGE_LENGTH: MessageLength = "medium";
 
+export const SCENARIO_MIN_CHARS = 20_000;
+export const PERSONALITY_MIN_CHARS = 12_000;
+export const EXTRA_DETAILS_MIN_CHARS = 2_500;
+
 export const IMAGE_MODELS = ["Dreamy", "Vivid", "Vivid 2", "Vivid 3"] as const;
 export type ImageModel = (typeof IMAGE_MODELS)[number];
 export const DEFAULT_IMAGE_MODEL: ImageModel = "Vivid";
@@ -670,9 +674,9 @@ export type CharacterCore = z.infer<typeof characterCoreSchema>;
 export const scenarioOnlySchema = z.object({
 	scenario: z
 		.string()
-		.min(1500)
+		.min(SCENARIO_MIN_CHARS)
 		.describe(
-			"Complete scenario field with narrative setup, romance/intimacy pacing, hidden trust system, scene progression, wardrobe state, and format rules.",
+			"Complete long-form scenario field with narrative setup, romance/intimacy pacing, hidden trust system, scene progression, wardrobe state, conversation-naturalism rules, continuity rules, and format rules.",
 		),
 });
 export type ScenarioOnly = z.infer<typeof scenarioOnlySchema>;
@@ -680,7 +684,7 @@ export type ScenarioOnly = z.infer<typeof scenarioOnlySchema>;
 export const personalityOnlySchema = z.object({
 	additionalPersonalityDetails: z
 		.string()
-		.min(6000)
+		.min(PERSONALITY_MIN_CHARS)
 		.describe(
 			"Complete XML-tagged behavioral personality spec. Must include all required personality sections in order.",
 		),
@@ -690,7 +694,7 @@ export type PersonalityOnly = z.infer<typeof personalityOnlySchema>;
 export const extraDetailsOnlySchema = z.object({
 	extraDetails: z
 		.string()
-		.min(1000)
+		.min(EXTRA_DETAILS_MIN_CHARS)
 		.describe(
 			"Complete XML-tagged lore and memory spec including Setting, Backstory, Relationship_And_Intimacy_History, Key_NPCs, NPC_Voice_Guidance, and Core_Behavior_And_Memory.",
 		),
