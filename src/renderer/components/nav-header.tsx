@@ -1,6 +1,7 @@
 import {
 	ExternalLink,
 	Maximize2,
+	MessageSquare,
 	Minimize2,
 	Minus,
 	Plus,
@@ -23,7 +24,7 @@ const NO_DRAG_STYLE = {
 
 const OURDREAM_REFERRAL_URL = "https://ourdream.ai/refer/RZ77V1";
 
-type RailKey = "characters" | "group-chats" | "settings";
+type RailKey = "characters" | "chat" | "group-chats" | "settings";
 
 export function NavHeader() {
 	const route = useRoute();
@@ -31,18 +32,25 @@ export function NavHeader() {
 		route.name === "group-chats" ||
 		route.name === "group-chat" ||
 		route.name === "group-chats-create";
+	const inChat = route.name === "chat";
 	const railKey: RailKey | null =
 		route.name === "gallery"
 			? "characters"
-			: inGroupChats
+			: inChat
+				? "chat"
+				: inGroupChats
 				? "group-chats"
 				: route.name === "settings"
 					? "settings"
 					: null;
 	const createActive =
 		route.name === "create" || route.name === "group-chats-create";
-	const createHref = inGroupChats ? "#/group-chats/create" : "#/create";
-	const createLabel = inGroupChats ? "New Group Chat" : "Create";
+	const createHref = inGroupChats
+		? "#/group-chats/create"
+		: inChat
+			? "#/chat"
+			: "#/create";
+	const createLabel = inGroupChats ? "New Group Chat" : inChat ? "New Chat" : "Create";
 
 	return (
 		<header
@@ -70,6 +78,12 @@ export function NavHeader() {
 					<nav className="flex items-center gap-5">
 						<RailLink active={railKey === "characters"} href="#/">
 							Characters
+						</RailLink>
+						<RailLink active={railKey === "chat"} href="#/chat">
+							<span className="inline-flex items-center gap-1.5">
+								<MessageSquare className="h-3.5 w-3.5" />
+								Chat
+							</span>
 						</RailLink>
 						<RailLink active={railKey === "group-chats"} href="#/group-chats">
 							Group Chats

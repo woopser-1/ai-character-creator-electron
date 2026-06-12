@@ -11,6 +11,7 @@ export type {
 	GroupChatImportResponse,
 	PortableGroupChat,
 } from "@shared/group-chat-port";
+export * from "@shared/runtime-chat";
 
 export const IMAGE_MODEL_META: Record<
 	ImageModel,

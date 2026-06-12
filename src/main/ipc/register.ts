@@ -7,8 +7,10 @@ import { registerGenerateIpc } from "./generate-ipc";
 import { registerGroupChatsIpc } from "./group-chats-ipc";
 import type { IpcCtx } from "./helpers";
 import { registerImagesIpc } from "./images-ipc";
+import { registerRuntimeChatIpc } from "./runtime-chat-ipc";
 import { registerSettingsIpc } from "./settings-ipc";
 import { registerSystemIpc } from "./system-ipc";
+import { registerUserPersonasIpc } from "./user-personas-ipc";
 
 // Each domain registers its own ipcMain.handle calls. We thread a small
 // context object through them carrying the main BrowserWindow (for dialogs
@@ -28,5 +30,7 @@ export function registerIpc(window: BrowserWindow): void {
 	registerSettingsIpc();
 	registerGenerateIpc(ctx);
 	registerChatIpc(ctx);
+	registerRuntimeChatIpc(ctx);
+	registerUserPersonasIpc();
 	registerImagesIpc(ctx);
 }

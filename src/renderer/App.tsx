@@ -16,6 +16,7 @@ import { GalleryPage } from "@/pages/Gallery";
 import { GroupChatDetailPage } from "@/pages/GroupChatDetail";
 import { GroupChatsPage } from "@/pages/GroupChats";
 import { RegeneratePage } from "@/pages/Regenerate";
+import { RuntimeChatPage } from "@/pages/RuntimeChat";
 import { SettingsPage } from "@/pages/Settings";
 
 export function App() {
@@ -57,6 +58,7 @@ function AppShell() {
 					{route.name === "gallery" && <GalleryPage />}
 					{route.name === "create" && <CreatePage />}
 					{route.name === "settings" && <SettingsPage />}
+					{route.name === "chat" && <RuntimeChatPage id={route.id} />}
 					{route.name === "character" && <CharacterDetailPage id={route.id} />}
 					{route.name === "regenerate" && <RegeneratePage id={route.id} />}
 					{route.name === "group-chats" && <GroupChatsPage />}

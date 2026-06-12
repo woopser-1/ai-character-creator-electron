@@ -458,14 +458,14 @@ const PERSONALITY_SECTION_MIN_CHARS: Record<PersonalityLlmSectionId, number> = {
 	banned_phrases: 900,
 };
 
-const personalityCompactText = z.string().min(50).max(600);
-const personalityDenseText = z.string().min(80).max(1200);
-const personalityQuote = z.string().min(5).max(240);
+const personalityCompactText = z.string().min(50);
+const personalityDenseText = z.string().min(80);
+const personalityQuote = z.string().min(5);
 
 const personalitySectionSchemas = {
 	introduction: z.object({
 		weightedTraits: z
-			.array(z.string().min(20).max(90))
+			.array(z.string().min(20))
 			.min(5)
 			.max(8)
 			.describe(
@@ -474,7 +474,6 @@ const personalitySectionSchemas = {
 		anchorParagraph: z
 			.string()
 			.min(300)
-			.max(900)
 			.describe(
 				"Two to three concrete sentences naming who the character is and their internal contradictions.",
 			),
@@ -483,7 +482,6 @@ const personalitySectionSchemas = {
 		axisSignalTables: z
 			.string()
 			.min(1200)
-			.max(4200)
 			.describe(
 				"Only the per-axis signal tables. Include every visible and hidden mood axis from the confirmed profile block when present.",
 			),
@@ -491,7 +489,7 @@ const personalitySectionSchemas = {
 	public_persona_vs_private_self: z.object({
 		publicBehaviors: z.array(personalityDenseText).min(4).max(4),
 		privateBehaviors: z.array(personalityDenseText).min(4).max(4),
-		gap: z.string().min(100).max(500),
+		gap: z.string().min(100),
 		maskCrackers: z.array(personalityDenseText).min(3).max(3),
 	}),
 	push_pull_dynamics: z.object({
@@ -516,7 +514,7 @@ const personalitySectionSchemas = {
 			)
 			.min(4)
 			.max(4),
-		internalMonologue: z.string().min(220).max(900),
+		internalMonologue: z.string().min(220),
 		copingRituals: z.array(personalityDenseText).min(3).max(3),
 		emotionalTells: z.array(personalityDenseText).min(4).max(4),
 	}),
@@ -540,7 +538,7 @@ const personalitySectionSchemas = {
 			promotesToNext: personalityDenseText,
 		}),
 		rung4: z.object({
-			mode: z.string().min(5).max(120),
+			mode: z.string().min(5),
 			quote: personalityQuote,
 			gesture: personalityDenseText,
 			physicalState: personalityDenseText,
@@ -549,7 +547,7 @@ const personalitySectionSchemas = {
 	}),
 	banned_phrases: z.object({
 		characterSpecificBans: z
-			.array(z.string().min(50).max(260))
+			.array(z.string().min(50))
 			.min(10)
 			.max(15)
 			.describe(
@@ -922,14 +920,22 @@ async function runPersonalityFanOut(
 
 	async function runSection(
 		sectionId: PersonalityLlmSectionId,
-		retry: boolean,
+		retryError?: string,
 	) {
+		const retry = Boolean(retryError);
 		const sectionSchema = personalitySectionSchema(sectionId);
 		const sectionJsonSchema = z.toJSONSchema(sectionSchema);
 		const baseSystem = [
 			buildPersonalitySectionPrompt(sectionId, difficulty, messageLength),
 			retry
-				? "## Retry repair\nYour previous attempt for this section failed validation. Return the same requested JSON shape, but this time fill every dynamic field with concrete character-specific content, remove every placeholder, and make the assembled section long enough to pass validation. Do not output XML tags. Do not apologize or explain."
+				? [
+						"## Retry repair",
+						"Your previous attempt for this section failed validation.",
+						"Previous failure:",
+						retryError?.slice(0, 1200) ?? "",
+						"",
+						"Return the same requested JSON shape and fix that exact issue. If the failure says a field is too small or the assembled section is too short, add concrete character-specific detail. If the failure says a field is too big, shorten only that field while preserving the important behavioral signals. Remove every placeholder. Do not output XML tags. Do not apologize or explain.",
+					].join("\n")
 				: "",
 		]
 			.filter(Boolean)
@@ -1009,9 +1015,7 @@ async function runPersonalityFanOut(
 	}
 
 	let subResults = await Promise.all(
-		PERSONALITY_LLM_SECTION_IDS.map((sectionId) =>
-			runSection(sectionId, false),
-		),
+		PERSONALITY_LLM_SECTION_IDS.map((sectionId) => runSection(sectionId)),
 	);
 
 	const firstFailures = subResults.filter((r) => !r.ok) as Array<
@@ -1019,7 +1023,9 @@ async function runPersonalityFanOut(
 	>;
 	if (firstFailures.length > 0) {
 		const retries = await Promise.all(
-			firstFailures.map((failure) => runSection(failure.sectionId, true)),
+			firstFailures.map((failure) =>
+				runSection(failure.sectionId, failure.error),
+			),
 		);
 		const retryMap = new Map(
 			retries.map((result) => [result.sectionId, result]),

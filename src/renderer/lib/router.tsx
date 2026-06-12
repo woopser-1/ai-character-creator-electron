@@ -4,6 +4,7 @@ export type Route =
 	| { name: "gallery" }
 	| { name: "create" }
 	| { name: "settings" }
+	| { name: "chat"; id?: string }
 	| { name: "character"; id: string }
 	| { name: "regenerate"; id: string }
 	| { name: "group-chats" }
@@ -16,6 +17,9 @@ function parseHash(hash: string): Route {
 	if (path === "/" || path === "") return { name: "gallery" };
 	if (path === "/create") return { name: "create" };
 	if (path === "/settings") return { name: "settings" };
+	if (path === "/chat") return { name: "chat" };
+	const chatMatch = path.match(/^\/chat\/([^/]+)$/);
+	if (chatMatch) return { name: "chat", id: chatMatch[1] };
 	if (path === "/group-chats") return { name: "group-chats" };
 	if (path === "/group-chats/create") return { name: "group-chats-create" };
 	const groupChatMatch = path.match(/^\/group-chats\/([^/]+)$/);

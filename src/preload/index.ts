@@ -18,6 +18,17 @@ import type { GroupChatImportResponse } from "@shared/group-chat-port";
 import type { ImageRefreshProgress, ImageRefreshResult } from "@shared/images";
 import type { CharacterResult, GroupChatResult } from "@shared/result";
 import type {
+	RuntimeChatDeleteResult,
+	RuntimeChatEvent,
+	RuntimeChatResult,
+	RuntimeChatState,
+	RuntimeChatUserProfile,
+	StoredChatConversation,
+	UserPersona,
+	UserPersonaInput,
+	UserPersonaResult,
+} from "@shared/runtime-chat";
+import type {
 	AppSettings,
 	Character,
 	CharacterProfilePreview,
@@ -482,6 +493,82 @@ const api = {
 			ipcRenderer.on("chat:event", listener);
 			return () => ipcRenderer.removeListener("chat:event", listener);
 		},
+	},
+	runtimeChat: {
+		list: (): Promise<StoredChatConversation[]> =>
+			ipcRenderer.invoke("runtime-chat:list"),
+		get: (id: string): Promise<StoredChatConversation | null> =>
+			ipcRenderer.invoke("runtime-chat:get", id),
+		create: (payload: {
+			characterId: string;
+			userProfile: RuntimeChatUserProfile;
+		}): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:create", payload),
+		delete: (id: string): Promise<RuntimeChatDeleteResult> =>
+			ipcRenderer.invoke("runtime-chat:delete", id),
+		updateUserProfile: (
+			id: string,
+			userProfile: RuntimeChatUserProfile,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:updateUserProfile", {
+				id,
+				userProfile,
+			}),
+		updateState: (
+			id: string,
+			currentState: RuntimeChatState,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:updateState", { id, currentState }),
+		sendMessage: (
+			conversationId: string,
+			text: string,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:sendMessage", { conversationId, text }),
+		addCharacterMessage: (
+			conversationId: string,
+			guidance?: string,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:addCharacterMessage", {
+				conversationId,
+				guidance,
+			}),
+		deleteMessage: (
+			conversationId: string,
+			messageId: string,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:deleteMessage", {
+				conversationId,
+				messageId,
+			}),
+		regenerateMessage: (
+			conversationId: string,
+			messageId: string,
+			guidance: string,
+		): Promise<RuntimeChatResult> =>
+			ipcRenderer.invoke("runtime-chat:regenerateMessage", {
+				conversationId,
+				messageId,
+				guidance,
+			}),
+		stop: (conversationId: string): Promise<void> =>
+			ipcRenderer.invoke("runtime-chat:stop", conversationId),
+		onEvent: (cb: (ev: RuntimeChatEvent) => void): (() => void) => {
+			const listener = (_e: unknown, ev: RuntimeChatEvent) => cb(ev);
+			ipcRenderer.on("runtime-chat:event", listener);
+			return () => ipcRenderer.removeListener("runtime-chat:event", listener);
+		},
+	},
+	userPersonas: {
+		list: (): Promise<UserPersona[]> => ipcRenderer.invoke("user-personas:list"),
+		create: (input: UserPersonaInput): Promise<UserPersonaResult> =>
+			ipcRenderer.invoke("user-personas:create", input),
+		update: (
+			id: string,
+			input: UserPersonaInput,
+		): Promise<UserPersonaResult> =>
+			ipcRenderer.invoke("user-personas:update", { id, input }),
+		delete: (id: string): Promise<{ success: true }> =>
+			ipcRenderer.invoke("user-personas:delete", id),
 	},
 };
 

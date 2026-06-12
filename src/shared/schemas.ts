@@ -682,7 +682,6 @@ export const personalityOnlySchema = z.object({
 	additionalPersonalityDetails: z
 		.string()
 		.min(6000)
-		.max(22000)
 		.describe(
 			"Complete XML-tagged behavioral personality spec. Must include all required personality sections in order.",
 		),

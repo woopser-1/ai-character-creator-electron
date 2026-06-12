@@ -1678,33 +1678,33 @@ const PERSONALITY_SECTION_DYNAMIC_SPEC: Record<
 > = {
 	introduction: `Return only these dynamic fields:
 - weightedTraits: 5-8 weighted trait tokens, each specific to this character and long enough to be meaningful, e.g. "(guarded_warmth_after_public_pressure:1.2)".
-- anchorParagraph: 300-900 characters, 2-3 concrete sentences naming who the character is now and the internal contradictions that make them interesting.`,
+- anchorParagraph: target 300-900 characters, 2-3 concrete sentences naming who the character is now and the internal contradictions that make them interesting.`,
 
 	mood_and_physical_state: `Return only this dynamic field:
-- axisSignalTables: 1200-4200 characters, the per-axis observable signal tables only. Include every mood axis from the CONFIRMED PROFILE block when present: primary, secondary, and hidden. If no confirmed moodAxes are present, infer two visible axes and one hidden axis from the summary, but keep them compatible with the likely light-field generation. Each axis needs four value bands with visible, audible, and postural tells.`,
+- axisSignalTables: target 1200-6000 characters, the per-axis observable signal tables only. Include every mood axis from the CONFIRMED PROFILE block when present: primary, secondary, and hidden. If no confirmed moodAxes are present, infer two visible axes and one hidden axis from the summary, but keep them compatible with the likely light-field generation. Each axis needs four value bands with visible, audible, and postural tells.`,
 
 	public_persona_vs_private_self: `Return only these dynamic fields:
-- publicBehaviors: exactly 4 concrete things the character does or says around strangers, acquaintances, work, or public pressure. Each item is 80-1200 characters.
-- privateBehaviors: exactly 4 concrete things the character does or says only around trusted people. Each item is 80-1200 characters.
-- gap: 100-500 characters explaining what the public/private split reveals.
-- maskCrackers: exactly 3 specific moments that crack the public mask. Each item is 80-1200 characters.`,
+- publicBehaviors: exactly 4 concrete things the character does or says around strangers, acquaintances, work, or public pressure. Target 80-700 characters each.
+- privateBehaviors: exactly 4 concrete things the character does or says only around trusted people. Target 80-700 characters each.
+- gap: target 100-700 characters explaining what the public/private split reveals.
+- maskCrackers: exactly 3 specific moments that crack the public mask. Target 80-700 characters each.`,
 
 	push_pull_dynamics: `Return only this dynamic field:
-- entries: 4-5 character-specific push/pull patterns. Each entry has trigger, action, and microRecovery, each 80-1200 characters. They must span different modes such as flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, or a better mode for this character.`,
+- entries: 4-5 character-specific push/pull patterns. Each entry has trigger, action, and microRecovery, target 80-700 characters each. They must span different modes such as flirt-then-retreat, opens-then-deflects, tests-then-rewards, invites-then-cancels, or a better mode for this character.`,
 
 	core_self_and_emotions: `Return only these dynamic fields:
-- speechPatterns: exactly 4 verbal quirks, each with quirk (50-600 characters) and quote.
-- internalMonologue: 220-900 characters, one first-person present-tense paragraph in the character's own thought voice.
-- copingRituals: exactly 3 named rituals with props, places, or timing. Each item is 80-1200 characters.
-- emotionalTells: exactly 4 observable physical, vocal, or behavioral tells. Each item is 80-1200 characters.`,
+- speechPatterns: exactly 4 verbal quirks, each with quirk and quote. Target 50-500 characters for each quirk.
+- internalMonologue: target 220-900 characters, one first-person present-tense paragraph in the character's own thought voice.
+- copingRituals: exactly 3 named rituals with props, places, or timing. Target 80-700 characters each.
+- emotionalTells: exactly 4 observable physical, vocal, or behavioral tells. Target 80-700 characters each.`,
 
 	in_emotionally_intense_moments: `Return only these dynamic fields:
-- rung1, rung2, rung3: each has quote, gesture, physicalState, promotesToNext. Every non-quote value is 80-1200 characters.
-- rung4: has mode, quote, gesture, physicalState, returnsToBaseline. Every non-quote value except mode is 80-1200 characters.
+- rung1, rung2, rung3: each has quote, gesture, physicalState, promotesToNext. Target 80-700 characters for each non-quote value.
+- rung4: has mode, quote, gesture, physicalState, returnsToBaseline. Target 80-700 characters for each non-quote value except mode.
 The four rungs must form one coherent escalation ladder for this character, not four unrelated reactions.`,
 
 	banned_phrases: `Return only this dynamic field:
-- characterSpecificBans: 10-15 phrases, moves, pet names, metaphors, or narration habits this specific character must never use. Each item is 50-260 characters and must tie to a named trait, background fact, class/culture/era clue, relationship wound, job, or voice rule. Do not include generic AI-chat cliches, romance-novel cliches, or body euphemism lists; those are assembled statically by the app.`,
+- characterSpecificBans: 10-15 phrases, moves, pet names, metaphors, or narration habits this specific character must never use. Target 50-260 characters each, tied to a named trait, background fact, class/culture/era clue, relationship wound, job, or voice rule. Do not include generic AI-chat cliches, romance-novel cliches, or body euphemism lists; those are assembled statically by the app.`,
 };
 
 export const PERSONALITY_SLASH_COMMANDS_BLOCK = `<Slash_Commands_Behavior>
