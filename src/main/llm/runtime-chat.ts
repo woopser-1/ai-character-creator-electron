@@ -20,6 +20,7 @@ import {
 	getFullName,
 	getStoredMessageLength,
 	MESSAGE_LENGTH_META,
+	type Difficulty,
 } from "@shared/schemas";
 import { getMessageLengthInstructions } from "@shared/prompts";
 import {
@@ -31,6 +32,31 @@ import { getLanguageModel } from "./provider";
 
 const MAX_TRANSCRIPT_MESSAGES = 40;
 const MEMORY_REFRESH_MESSAGE_COUNT = 12;
+const TIER_RANKS: Record<string, number> = {
+	T1: 1,
+	T2: 2,
+	T3: 3,
+	T4: 4,
+	T5: 5,
+};
+
+type RuntimeDifficultyPolicy = {
+	positiveCaps: {
+		trust: number;
+		attraction: number;
+		arousal: number;
+		friendliness: number;
+		axis: number;
+	};
+	stage?: {
+		maxTier: string;
+		maxTrust: number;
+		maxAttraction: number;
+		maxArousal: number;
+		maxFriendliness: number;
+		label: string;
+	};
+};
 
 const STATE_JSON_SCHEMA = {
 	type: "object",
@@ -103,6 +129,282 @@ function bandForTrust(trust: number): string {
 	if (trust >= 36) return "Familiar";
 	if (trust >= 16) return "Acquaintance";
 	return "Stranger";
+}
+
+function countUserTurns(conversation: StoredChatConversation): number {
+	return conversation.messages.filter(
+		(message) => message.role === "user" && message.text.trim(),
+	).length;
+}
+
+function tierRank(tier: string): number {
+	return TIER_RANKS[tier] ?? 1;
+}
+
+function capTier(tier: string, maxTier: string): string {
+	return tierRank(tier) > tierRank(maxTier) ? maxTier : tier;
+}
+
+function tierFromState(state: Pick<
+	RuntimeChatState,
+	"trust" | "attraction" | "arousal" | "friendliness"
+>): string {
+	if (state.attraction >= 60 && state.arousal >= 65 && state.trust >= 50) {
+		return "T5";
+	}
+
+	if (state.attraction >= 55 && state.arousal >= 50 && state.trust >= 45) {
+		return "T4";
+	}
+
+	if (state.attraction >= 40 && state.trust >= 35) return "T3";
+	if (state.friendliness >= 25 || state.attraction >= 20) return "T2";
+
+	return "T1";
+}
+
+function runtimeDifficultyPolicy(
+	difficulty: Difficulty,
+	userTurns: number,
+): RuntimeDifficultyPolicy {
+	const positiveCaps: Record<Difficulty, RuntimeDifficultyPolicy["positiveCaps"]> =
+		{
+			easy: { trust: 5, attraction: 6, arousal: 25, friendliness: 6, axis: 10 },
+			medium: { trust: 3, attraction: 4, arousal: 20, friendliness: 4, axis: 7 },
+			hard: { trust: 2, attraction: 3, arousal: 15, friendliness: 3, axis: 4 },
+			extreme: { trust: 1, attraction: 2, arousal: 10, friendliness: 2, axis: 2 },
+		};
+
+	if (difficulty === "extreme") {
+		if (userTurns <= 30) {
+			return {
+				positiveCaps: positiveCaps.extreme,
+				stage: {
+					maxTier: "T1",
+					maxTrust: 15,
+					maxAttraction: 15,
+					maxArousal: 5,
+					maxFriendliness: 25,
+					label: "first 30 exchanges: closed-off resistance",
+				},
+			};
+		}
+
+		if (userTurns < 50) {
+			return {
+				positiveCaps: positiveCaps.extreme,
+				stage: {
+					maxTier: "T2",
+					maxTrust: 35,
+					maxAttraction: 30,
+					maxArousal: 15,
+					maxFriendliness: 45,
+					label: "30-49 exchanges: guarded acquaintance",
+				},
+			};
+		}
+
+		if (userTurns < 80) {
+			return {
+				positiveCaps: positiveCaps.extreme,
+				stage: {
+					maxTier: "T3",
+					maxTrust: 55,
+					maxAttraction: 45,
+					maxArousal: 35,
+					maxFriendliness: 60,
+					label: "50-79 exchanges: first earned cracks only",
+				},
+			};
+		}
+	}
+
+	if (difficulty === "hard") {
+		if (userTurns <= 10) {
+			return {
+				positiveCaps: positiveCaps.hard,
+				stage: {
+					maxTier: "T1",
+					maxTrust: 25,
+					maxAttraction: 25,
+					maxArousal: 10,
+					maxFriendliness: 35,
+					label: "first 10 exchanges: active resistance",
+				},
+			};
+		}
+
+		if (userTurns < 20) {
+			return {
+				positiveCaps: positiveCaps.hard,
+				stage: {
+					maxTier: "T2",
+					maxTrust: 35,
+					maxAttraction: 35,
+					maxArousal: 20,
+					maxFriendliness: 50,
+					label: "10-19 exchanges: cautious rapport",
+				},
+			};
+		}
+
+		if (userTurns < 30) {
+			return {
+				positiveCaps: positiveCaps.hard,
+				stage: {
+					maxTier: "T3",
+					maxTrust: 55,
+					maxAttraction: 50,
+					maxArousal: 45,
+					maxFriendliness: 65,
+					label: "20-29 exchanges: limited romantic tension",
+				},
+			};
+		}
+	}
+
+	return { positiveCaps: positiveCaps[difficulty] };
+}
+
+function clampPositiveDelta(
+	before: number,
+	after: number,
+	cap: number,
+	max?: number,
+): number {
+	const capped = after > before ? Math.min(after, before + cap) : after;
+
+	return clampInt(max === undefined ? capped : Math.min(capped, max), 0, 100);
+}
+
+function clampAxisState(
+	before: RuntimeChatAxisState | undefined,
+	after: RuntimeChatAxisState,
+	cap: number,
+): RuntimeChatAxisState {
+	if (!before) return { ...after, value: clampInt(after.value, 0, 100) };
+
+	return {
+		...after,
+		value: clampPositiveDelta(before.value, after.value, cap),
+	};
+}
+
+function constrainRuntimeState(params: {
+	state: RuntimeChatState;
+	previousState: RuntimeChatState;
+	difficulty: Difficulty;
+	userTurns: number;
+}): RuntimeChatState {
+	const policy = runtimeDifficultyPolicy(params.difficulty, params.userTurns);
+	const stage = policy.stage;
+	const next: RuntimeChatState = {
+		...params.state,
+		visibleAxes: {
+			primary: clampAxisState(
+				params.previousState.visibleAxes.primary,
+				params.state.visibleAxes.primary,
+				policy.positiveCaps.axis,
+			),
+			secondary: clampAxisState(
+				params.previousState.visibleAxes.secondary,
+				params.state.visibleAxes.secondary,
+				policy.positiveCaps.axis,
+			),
+		},
+		hiddenAxes: params.state.hiddenAxes.map((axis, index) => {
+			const previous =
+				params.previousState.hiddenAxes.find((item) => item.label === axis.label) ??
+				params.previousState.hiddenAxes[index];
+
+			return clampAxisState(previous, axis, policy.positiveCaps.axis);
+		}),
+		trust: clampPositiveDelta(
+			params.previousState.trust,
+			params.state.trust,
+			policy.positiveCaps.trust,
+			stage?.maxTrust,
+		),
+		attraction: clampPositiveDelta(
+			params.previousState.attraction,
+			params.state.attraction,
+			policy.positiveCaps.attraction,
+			stage?.maxAttraction,
+		),
+		arousal: clampPositiveDelta(
+			params.previousState.arousal,
+			params.state.arousal,
+			policy.positiveCaps.arousal,
+			stage?.maxArousal,
+		),
+		friendliness: clampPositiveDelta(
+			params.previousState.friendliness,
+			params.state.friendliness,
+			policy.positiveCaps.friendliness,
+			stage?.maxFriendliness,
+		),
+	};
+	const computedTier = tierFromState(next);
+
+	next.band = bandForTrust(next.trust);
+	next.tier = stage ? capTier(computedTier, stage.maxTier) : computedTier;
+
+	if (
+		next.tier !== params.state.tier ||
+		next.trust !== params.state.trust ||
+		next.attraction !== params.state.attraction ||
+		next.arousal !== params.state.arousal ||
+		next.friendliness !== params.state.friendliness
+	) {
+		next.notes = [next.notes, "Connection stayed within the current trust band."]
+			.filter(Boolean)
+			.join(" ");
+	}
+
+	return next;
+}
+
+function tierLimitText(tier: string): string {
+	switch (tier) {
+		case "T1":
+			return "conversation only: no flirting, no romantic reciprocation, no touch, no undressing, no sexual or sensual narration";
+		case "T2":
+			return "guarded rapport only: brief non-sexual touch may happen if earned, but no kissing, no romantic surrender, no undressing, no sensual escalation";
+		case "T3":
+			return "limited romantic contact only: kissing or charged closeness may happen if earned, but no hands under clothes, no garment removal, no explicit sexual contact";
+		case "T4":
+			return "sensual escalation may happen if earned, but explicit sexual contact remains locked";
+		default:
+			return "fully unlocked only when consent, personality, and current state all support it";
+	}
+}
+
+function runtimeDifficultyGateBlock(
+	conversation: StoredChatConversation,
+	storedCharacter: StoredCharacter,
+): string {
+	const userTurns = countUserTurns(conversation);
+	const difficulty = storedCharacter.difficulty;
+	const policy = runtimeDifficultyPolicy(difficulty, userTurns);
+	const caps = policy.positiveCaps;
+	const stageLines = policy.stage
+		? [
+				`- Current slow-burn stage: ${policy.stage.label}.`,
+				`- Maximum allowed tier for this reply: ${policy.stage.maxTier} (${tierLimitText(policy.stage.maxTier)}).`,
+				`- Hard state ceilings now: trust ${policy.stage.maxTrust}/100, attraction ${policy.stage.maxAttraction}/100, arousal ${policy.stage.maxArousal}/100, friendliness ${policy.stage.maxFriendliness}/100.`,
+			]
+		: [
+				"- No turn-count tier ceiling remains, but escalation still requires the current state, consent, personality, and scenario gates.",
+			];
+
+	return [
+		"Runtime difficulty gate:",
+		`- Stored difficulty: ${difficulty}. Current user exchange count: ${userTurns}.`,
+		...stageLines,
+		`- Maximum positive movement after one reply: trust +${caps.trust}, attraction +${caps.attraction}, arousal +${caps.arousal}, friendliness +${caps.friendliness}, visible/hidden mood axes +${caps.axis}.`,
+		"- If the user pushes beyond the current allowed tier, refuse or deflect in character. The refusal is the scene.",
+		"- Never write a romantic, sensual, or sexual breakthrough by assuming off-screen trust, skipped messages, hidden consent, or sudden attraction.",
+	].join("\n");
 }
 
 function axisFromMoodAxis(axis: {
@@ -303,6 +605,8 @@ ${guidance ? `- Apply this one-turn operator guidance: ${guidance}` : ""}
 
 ${getMessageLengthInstructions(messageLength)}
 
+${runtimeDifficultyGateBlock(conversation, storedCharacter)}
+
 Character profile:
 Name: ${getFullName(character)}
 Gender: ${character.gender ?? "unspecified"}
@@ -342,6 +646,7 @@ function buildMessages(
 async function generateNextState(params: {
 	modelId: string;
 	character: Character;
+	difficulty: Difficulty;
 	conversation: StoredChatConversation;
 	previousState: RuntimeChatState;
 	assistantText: string;
@@ -349,9 +654,19 @@ async function generateNextState(params: {
 	abortSignal: AbortSignal;
 }): Promise<RuntimeChatState> {
 	const model = await getLanguageModel(params.modelId);
+	const userTurns = countUserTurns(params.conversation);
+	const policy = runtimeDifficultyPolicy(params.difficulty, userTurns);
+	const caps = policy.positiveCaps;
 	const latestUserMessage = [...params.conversation.messages]
 		.reverse()
 		.find((message) => message.role === "user");
+	const stageRules = policy.stage
+		? [
+				`- Current slow-burn stage: ${policy.stage.label}.`,
+				`- Maximum tier is ${policy.stage.maxTier}; do not return a higher tier.`,
+				`- Hard ceilings now: trust ${policy.stage.maxTrust}, attraction ${policy.stage.maxAttraction}, arousal ${policy.stage.maxArousal}, friendliness ${policy.stage.maxFriendliness}.`,
+			].join("\n")
+		: "- No turn-count tier ceiling remains, but all state movement must still be earned by the fiction.";
 	const prompt = `Return the next state JSON after this assistant reply.
 
 Rules:
@@ -365,6 +680,10 @@ Rules:
 - band is Stranger, Acquaintance, Familiar, Trusted, Close, or Bonded.
 - Do not reward user behavior that was not actually present.
 - Never infer user feelings, consent, actions, speech, or physical reactions.
+- Stored difficulty is ${params.difficulty}; current user exchange count is ${userTurns}.
+${stageRules}
+- Maximum positive movement after one reply: trust +${caps.trust}, attraction +${caps.attraction}, arousal +${caps.arousal}, friendliness +${caps.friendliness}, visible/hidden mood axes +${caps.axis}.
+- Negative movement may be sharper when the user pushes, violates boundaries, or contradicts the character's trust rules.
 
 Character: ${getFullName(params.character)}
 Character mood axes: ${JSON.stringify(params.character.moodAxes ?? null)}
@@ -383,7 +702,14 @@ Regeneration guidance: ${params.regenerationHint ?? "none"}`;
 		maxRetries: 1,
 	});
 
-	return runtimeChatStateSchema.parse(result.object);
+	const state = runtimeChatStateSchema.parse(result.object);
+
+	return constrainRuntimeState({
+		state,
+		previousState: params.previousState,
+		difficulty: params.difficulty,
+		userTurns,
+	});
 }
 
 function deltaTone(key: string, value: number): "positive" | "negative" | "neutral" {
@@ -585,6 +911,7 @@ async function runRuntimeChatTurn(params: {
 		const state = await generateNextState({
 			modelId: params.modelId,
 			character: params.storedCharacter.character,
+			difficulty: params.storedCharacter.difficulty,
 			conversation: params.conversation,
 			previousState: params.conversation.currentState,
 			assistantText,
